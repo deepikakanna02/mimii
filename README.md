@@ -1,4 +1,4 @@
-# mimii
+# Malfunctioning Industrial Machine Investigation and Inspection
 # Machine Failure Detection via Audio Anomaly Detection
 
 An end-to-end **Machine Failure Detection System** using audio anomaly detection and the **MIMII (Malfunctioning Industrial Machine Investigation and Inspection)** dataset.
