@@ -1,0 +1,53 @@
+{
+  "machines": {
+    "pump": {
+      "architecture": "supervised_combo",
+      "component_architectures": [
+        "conv_ae_v1",
+        "conv_ae_v2"
+      ],
+      "weights_files": {
+        "conv_ae_v1": "pump_conv_ae_v1.pt",
+        "conv_ae_v2": "pump_conv_ae_v2.pt"
+      },
+      "preprocessing_config": {
+        "sample_rate": 16000,
+        "n_fft": 2048,
+        "hop_length": 512,
+        "n_mels": 128,
+        "fmin": 0,
+        "fmax": 8000,
+        "power": 2.0,
+        "top_db": 80.0,
+        "fixed_frames": 313,
+        "clip_duration_sec": 10.0,
+        "trim_silence": true,
+        "norm_mean": -29.892526626586914,
+        "norm_std": 9.249401092529297
+      },
+      "threshold": 0.4832223649199257,
+      "auc_roc": 0.9769159741458912,
+      "metrics_at_threshold": {
+        "precision": 0.9078947368421053,
+        "recall": 0.9078947368421053,
+        "f1": 0.9078947368421053,
+        "confusion_matrix": [
+          [
+            50,
+            7
+          ],
+          [
+            7,
+            69
+          ]
+        ]
+      },
+      "cv_mean_auc": 0.9465835641735918,
+      "cv_std_auc": 0.01596747281345697,
+      "combiner_file": "pump_combiner.pkl",
+      "combiner_algorithm": "auc_weighted_vote(logreg=0.35, random_forest=0.33, gradient_boosting=0.32)",
+      "combiner_features": "[mean_frame_err, max_frame_err, std_frame_err, p90_frame_err] per component model, concatenated in component_architectures order",
+      "combiner_note": "score = sum over name, classifier in classifiers.items() of weights[name] * classifier.predict_proba(scaler.transform(features))[:,1]"
+    }
+  }
+}

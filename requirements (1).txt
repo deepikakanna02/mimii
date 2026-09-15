@@ -1,0 +1,19 @@
+# Shared (common/) — pinned so A, B and C resolve identically
+numpy==1.26.4
+librosa==0.10.2
+soundfile==0.12.1
+torch==2.3.1
+scikit-learn==1.5.0
+
+# Training / evaluation (Person A)
+pandas==2.2.2
+matplotlib==3.9.0
+tqdm==4.66.4
+
+# Backend (Person B)
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# Dashboard (Person C)
+streamlit==1.36.0
