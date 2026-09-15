@@ -56,9 +56,7 @@ The project uses the **MIMII dataset**, which contains real industrial machine r
 Target machine types:
 
 * Pump
-* Fan
-* Valve
-* Slider
+
 
 ### Current Dataset Status
 
@@ -75,9 +73,6 @@ Machine type:    Pump
 
 The current notebook automatically discovers the dataset and parses `normal` / `abnormal` labels from the file paths.
 
-> Important: Do not assume that fan, valve and slider models are already available. The current implementation is currently validated on the pump dataset.
-
----
 
 # 3. System Architecture
 
@@ -143,7 +138,6 @@ Build the complete audio preprocessing and anomaly detection model.
 1. Load and inspect the MIMII dataset.
 2. Identify:
 
-   * Machine type
    * Machine ID
    * Normal / abnormal label
 3. Convert raw WAV audio into Mel-spectrograms.
@@ -288,9 +282,6 @@ For example:
 
 ```text
 pump  → pump_autoencoder.pt  → pump_threshold
-fan   → fan_autoencoder.pt   → fan_threshold
-valve → valve_autoencoder.pt → valve_threshold
-slider → slider_autoencoder.pt → slider_threshold
 ```
 
 This avoids forcing one model to learn very different acoustic characteristics from different machine types.
@@ -618,9 +609,6 @@ machine-failure-detection/
 │
 ├── models/
 │   ├── pump_autoencoder.pt
-│   ├── fan_autoencoder.pt
-│   ├── valve_autoencoder.pt
-│   └── slider_autoencoder.pt
 │
 ├── config/
 │   ├── preprocessing.json
@@ -899,9 +887,7 @@ Future:
 
 ```text
 Pump  → Pump Autoencoder
-Fan   → Fan Autoencoder
-Valve → Valve Autoencoder
-Slider → Slider Autoencoder
+
 ```
 
 ---
