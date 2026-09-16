@@ -1,1008 +1,567 @@
-# Malfunctioning Industrial Machine Investigation and Inspection
-# Machine Failure Detection via Audio Anomaly Detection
-
-An end-to-end **Machine Failure Detection System** using audio anomaly detection and the **MIMII (Malfunctioning Industrial Machine Investigation and Inspection)** dataset.
-
-The system learns the characteristics of **normal machine sounds** using CNN-based Autoencoders. During inference, abnormal sounds are identified using the **reconstruction error** produced by the Autoencoder.
-
-The final system consists of:
-
-* **ML Model:** Audio preprocessing + Mel-spectrogram generation + CNN Autoencoder
-* **Backend:** FastAPI inference service
-* **Dashboard:** Streamlit/React interface
-* **Evaluation:** Precision, Recall, F1-score, ROC-AUC and confusion matrices
-* **Deployment:** Docker
-
----
-
-## 1. Project Overview
-
-Industrial machines often produce characteristic sounds during normal operation. Mechanical faults can change these sound patterns before a complete failure occurs.
-
-This project uses **audio anomaly detection** to identify such abnormal operating conditions.
-
-### Basic Pipeline
-
-```text
-Raw Audio
-    ↓
-Audio Preprocessing
-    ↓
-Mel-Spectrogram
-    ↓
-CNN Autoencoder
-    ↓
-Reconstruction Error
-    ↓
-Threshold Comparison
-    ↓
-Normal / Anomalous
-    ↓
-FastAPI
-    ↓
-Dashboard
-```
-
-The Autoencoder is trained primarily on **normal machine sounds**. It learns to reconstruct normal sounds well. When an abnormal sound is passed through the model, its reconstruction error is expected to be higher.
-
----
-
-# 2. Dataset
-
-### MIMII Dataset
-
-The project uses the **MIMII dataset**, which contains real industrial machine recordings in normal and abnormal conditions.
-
-Target machine types:
-
-* Pump
-
-
-### Current Dataset Status
-
-The current development notebook contains a **pump-only MIMII dataset**.
-
-Current dataset detected:
-
-```text
-Total WAV files: 519
-Normal:          381
-Abnormal:        138
-Machine type:    Pump
-```
-
-The current notebook automatically discovers the dataset and parses `normal` / `abnormal` labels from the file paths.
-
-
-# 3. System Architecture
-
-```text
-                    ┌─────────────────────┐
-                    │     Audio Input     │
-                    │      (.wav etc.)     │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   FastAPI Backend   │
-                    │                     │
-                    │ Audio preprocessing │
-                    │ Model selection     │
-                    │ Inference            │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   CNN Autoencoder   │
-                    │                     │
-                    │ Reconstruction      │
-                    │ Error Calculation   │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │ Threshold Comparison│
-                    └──────────┬──────────┘
-                               │
-                  ┌────────────┴────────────┐
-                  ▼                         ▼
-              NORMAL                    ANOMALOUS
-                  │                         │
-                  └────────────┬────────────┘
-                               ▼
-                    ┌─────────────────────┐
-                    │     Dashboard       │
-                    │                     │
-                    │ Waveform            │
-                    │ Spectrogram          │
-                    │ Anomaly Score        │
-                    │ Prediction           │
-                    │ Metrics              │
-                    └─────────────────────┘
-```
-
----
-
-# 4. Team Responsibilities
-
-The project is split between three people.
-
-## Person A — Signal Processing & Machine Learning
-
-### Main Responsibility
-
-Build the complete audio preprocessing and anomaly detection model.
-
-### Tasks
-
-1. Load and inspect the MIMII dataset.
-2. Identify:
-
-   * Machine ID
-   * Normal / abnormal label
-3. Convert raw WAV audio into Mel-spectrograms.
-4. Establish and freeze the preprocessing configuration.
-5. Train CNN-based Autoencoder(s) using normal training samples.
-6. Calculate reconstruction errors.
-7. Determine anomaly thresholds.
-8. Evaluate the model.
-9. Save the trained model and all required preprocessing information.
-
-### Current Preprocessing Contract
-
-The current notebook uses:
-
-```text
-Sample rate:       16000 Hz
-FFT size:          2048
-Hop length:        512
-Mel bins:          128
-Minimum frequency: 0 Hz
-Maximum frequency: 8000 Hz
-Power:             2.0
-Top dB:            80
-Clip duration:     10 seconds
-Fixed frames:      313
-Mono audio:        Yes
-Trim silence:      Yes
-```
-
-The resulting Mel-spectrogram shape is:
-
-```text
-(128, 313)
-```
-
-The notebook currently uses `librosa` for audio loading and Mel-spectrogram generation and PyTorch for the model.
-
-### Person A MUST provide
-
-```text
-models/
-    pump_autoencoder.pt
-
-config/
-    preprocessing.json
-    thresholds.json
-
-metadata/
-    model_metadata.json
-```
-
-The exact filenames can be changed, but the information must be available to Person B.
-
-### Model Artifact Contract
-
-Person A must provide:
-
-```json
-{
-    "machine_type": "pump",
-    "sample_rate": 16000,
-    "n_fft": 2048,
-    "hop_length": 512,
-    "n_mels": 128,
-    "fmin": 0,
-    "fmax": 8000,
-    "power": 2.0,
-    "top_db": 80,
-    "fixed_frames": 313,
-    "clip_duration_sec": 10,
-    "trim_silence": true,
-    "normalization": {
-        "mean": "...",
-        "std": "..."
-    },
-    "threshold": "..."
-}
-```
-
-The actual normalization statistics and threshold must be filled in after training.
-
----
-
-# 5. Threshold Decision
-
-**Person A owns the threshold decision.**
-
-The reconstruction error is continuous, so a threshold is required to convert it into:
-
-```text
-Normal
-```
-
-or
-
-```text
-Anomalous
-```
-
-### Recommended approach
-
-Calculate reconstruction errors on the **normal validation set** and initially use:
-
-```text
-Threshold = 95th percentile of normal validation reconstruction errors
-```
-
-Then:
-
-```text
-if reconstruction_error > threshold:
-    prediction = anomalous
-else:
-    prediction = normal
-```
-
-Person A must save the final threshold and pass it to Person B.
-
-### Important
-
-Person B must **not independently choose another threshold**.
-
-Person C may experiment with different thresholds during evaluation, but the production threshold remains the threshold supplied by Person A.
-
----
-
-# 6. Model Strategy
-
-The preferred architecture is:
-
-```text
-Machine Type
-     ↓
-Corresponding Autoencoder
-     ↓
-Reconstruction Error
-     ↓
-Machine-specific Threshold
-```
-
-For example:
-
-```text
-pump  → pump_autoencoder.pt  → pump_threshold
-```
-
-This avoids forcing one model to learn very different acoustic characteristics from different machine types.
-
-### Current implementation
-
-The current notebook is **pump-only**, so initially:
-
-```text
-pump → pump_autoencoder.pt
-```
-
-When additional MIMII machine types are added, the same interface should be extended rather than redesigning the entire backend.
-
----
-
-# 7. Person B — Backend & Serving
-
-## Main Responsibility
-
-Build the inference API using **FastAPI** and Dockerize it.
-
-### Person B Tasks
-
-1. Create FastAPI application.
-2. Create an audio upload endpoint.
-3. Accept:
-
-   * Audio file
-   * Machine type
-4. Run exactly the same preprocessing as Person A.
-5. Load the corresponding Autoencoder.
-6. Calculate reconstruction error.
-7. Load the corresponding threshold.
-8. Return:
-
-   * Machine type
-   * Anomaly score
-   * Threshold
-   * Prediction
-9. Add error handling.
-10. Add API documentation.
-11. Dockerize the backend.
-
-### Suggested Endpoint
-
-```http
-POST /predict
-```
-
-Request:
-
-```text
-multipart/form-data
-
-file = audio.wav
-machine_type = pump
-```
-
-Response:
-
-```json
-{
-    "machine_type": "pump",
-    "anomaly_score": 0.0245,
-    "threshold": 0.0182,
-    "prediction": "anomalous"
-}
-```
-
-### Health Endpoint
-
-```http
-GET /health
-```
-
-Response:
-
-```json
-{
-    "status": "healthy"
-}
-```
-
-### Person B Development Strategy
-
-Do NOT wait for Person A's final model.
-
-Initially create:
-
-```text
-Audio
- ↓
-Mock preprocessing
- ↓
-Dummy model
- ↓
-Mock anomaly score
- ↓
-API response
-```
-
-Once Person A provides the model artifact:
-
-```text
-Audio
- ↓
-Real preprocessing
- ↓
-Real Autoencoder
- ↓
-Real reconstruction error
- ↓
-Real threshold
- ↓
-API response
-```
-
-### Docker
-
-Person B must provide:
-
-```text
-Dockerfile
-requirements.txt
-docker-compose.yml
-```
-
-The backend should be runnable with:
-
-```bash
-docker compose up --build
-```
-
----
-
-# 8. Person C — Dashboard & Evaluation
-
-## Main Responsibility
-
-Build the user interface and evaluate model performance.
-
-### Dashboard Features
-
-The dashboard should allow a user to:
-
-1. Select machine type.
-2. Upload an audio file.
-3. Play the uploaded audio.
-4. Display waveform.
-5. Display Mel-spectrogram.
-6. Send the audio to the FastAPI backend.
-7. Display anomaly score.
-8. Display threshold.
-9. Display prediction.
-10. Display evaluation metrics.
-
-### Example Dashboard
-
-```text
-┌─────────────────────────────────────────┐
-│       MACHINE FAILURE DETECTION         │
-├─────────────────────────────────────────┤
-│ Machine Type: [ Pump ▼ ]                │
-│                                         │
-│ Upload Audio: [ choose .wav ]           │
-│                                         │
-│ Waveform                                │
-│ ─────────────────────────────────────── │
-│                                         │
-│ Mel-Spectrogram                         │
-│ ─────────────────────────────────────── │
-│                                         │
-│ Anomaly Score: 0.0245                   │
-│ Threshold:     0.0182                   │
-│                                         │
-│ Prediction: ⚠ ANOMALOUS                 │
-└─────────────────────────────────────────┘
-```
-
-### Evaluation Metrics
-
-Person C should calculate:
-
-* Precision
-* Recall
-* F1-score
-* ROC-AUC
-* Confusion Matrix
-
-Metrics should be reported:
-
-```text
-Overall
-```
-
-and, where data is available:
-
-```text
-Per machine type
-```
-
-Example:
-
-```text
-             Precision  Recall  F1   ROC-AUC
-Pump            ...
-
---------------------------------------------
-Overall         ...
-```
-
-### Threshold Evaluation
-
-Although Person A provides the production threshold, Person C can evaluate multiple thresholds to understand the precision/recall tradeoff.
-
-ROC-AUC should be reported because it is threshold-independent.
-
----
-
-# 9. Person C Development Strategy
-
-Person C should NOT wait for Person B.
-
-Start with a mock API response:
-
-```json
-{
-    "machine_type": "pump",
-    "anomaly_score": 0.0245,
-    "threshold": 0.0182,
-    "prediction": "anomalous"
-}
-```
-
-Build the complete dashboard around this response.
-
-Later replace:
-
-```text
-Mock API
-```
+MIMII Machine Failure Detection Backend
+
+Audio-based industrial machine failure detection using the MIMII
+dataset, CNN autoencoders, a trained ensemble/combiner, and a FastAPI
+inference service.
+
+Current Scope
+
+The current implementation supports pump only.
+
+The backend accepts a .wav recording, runs the trained pump
+anomaly-detection pipeline, and returns an anomaly score and prediction.
+
+Current request flow:
+
+Audio (.wav) ↓ FastAPI ↓ Temporary file ↓ Shared preprocessing
+(common/preprocessing.py) ↓ ConvAutoencoder V1 + ConvAutoencoder V2 ↓
+Trained combiner (pump_combiner.pkl) ↓ Anomaly score + threshold ↓
+Normal / Anomalous ↓ JSON response
+
+The backend does not currently require the frontend to send a machine
+type. The machine is fixed to pump in the current implementation.
+
+------------------------------------------------------------------------
+
+Project Structure
+
+Current repository structure:
+
+    mimii/
+    ├── artifacts/
+    │   ├── cv_metrics_summary.csv
+    │   ├── manifest.json
+    │   ├── pump_combiner.pkl
+    │   ├── pump_conv_ae_v1.pt
+    │   └── pump_conv_ae_v2.pt
+    │
+    ├── common/
+    │   ├── __init__.py
+    │   ├── models.py
+    │   ├── preprocessing.py
+    │   └── scoring.py
+    │
+    ├── main.py
+    ├── requirements.txt
+    ├── README.md
+    └── notebookc71a97b3e7.ipynb
+
+Important files
+
+main.py - FastAPI application. - Defines /health and /predict. - Loads
+AnomalyScorer once when the application starts. - Handles upload
+validation, temporary-file management, inference, and API response
+formatting.
+
+common/preprocessing.py - Single source of truth for audio
+preprocessing. - Do not reimplement the preprocessing in the backend.
+
+common/models.py - Contains the CNN autoencoder architectures. -
+Provides build_model() used by the scoring pipeline.
+
+common/scoring.py - Complete inference pipeline. - Loads the model
+artifacts from artifacts/. - Runs preprocessing, model inference,
+feature extraction, and the trained combiner. - The backend calls this
+code instead of duplicating ML logic.
+
+artifacts/manifest.json - Defines the pump model configuration,
+preprocessing parameters, model architecture, weights, threshold, and
+combiner information.
+
+------------------------------------------------------------------------
+
+ML Inference Pipeline
+
+The current production inference architecture is:
+
+    Input WAV
+       ↓
+    Preprocessing
+       ↓
+    ConvAE V1 ──┐
+                ├── reconstruction-error features
+    ConvAE V2 ──┘
+       ↓
+    pump_combiner.pkl
+       ↓
+    anomaly_score
+       ↓
+    threshold comparison
+       ↓
+    normal / anomalous
+
+The architecture recorded in the current manifest is:
+
+    supervised_combo
 
 with:
 
-```text
-Real FastAPI backend
-```
+    conv_ae_v1
+    conv_ae_v2
 
-This allows A, B and C to work simultaneously.
+as component models.
 
----
+The backend must use common.scoring.AnomalyScorer for inference. Do not
+create a separate preprocessing or scoring implementation in main.py.
 
-# 10. Critical A → B → C Interface
+------------------------------------------------------------------------
 
-This is the most important integration contract in the project.
+Preprocessing Contract
 
-Person A must freeze the preprocessing configuration.
+The current pump preprocessing configuration is stored in
+artifacts/manifest.json.
 
-Person B must reproduce it exactly.
+Current values:
 
-Person C must use the same definitions when displaying/evaluating results.
+    Sample rate:       16000 Hz
+    FFT size:          2048
+    Hop length:        512
+    Mel bins:          128
+    Minimum frequency: 0 Hz
+    Maximum frequency: 8000 Hz
+    Power:             2.0
+    Top dB:            80
+    Clip duration:     10 seconds
+    Fixed frames:      313
+    Mono:              Yes
+    Trim silence:      Yes
 
-### The following MUST NOT change silently
+The resulting log-Mel spectrogram has shape:
 
-```text
-Sample rate
-FFT size
-Hop length
-Number of Mel bins
-Frequency range
-Power
-Top dB
-Clip duration
-Fixed spectrogram dimensions
-Silence trimming
-Normalization
-Model architecture
-Threshold
-```
+    (128, 313)
 
-For the current implementation:
+Normalization uses the statistics stored in the manifest.
 
-```text
-Input audio
-    ↓
-16 kHz
-    ↓
-10 seconds
-    ↓
-128 Mel bins × 313 frames
-    ↓
-Normalization
-    ↓
-Autoencoder
-```
+Important
 
-If Person B uses different preprocessing from Person A, the reconstruction error will no longer be comparable to the training reconstruction error.
+Preprocessing is part of the model inference contract.
 
-**Therefore, preprocessing configuration must be treated as part of the model artifact.**
+If the preprocessing parameters change, the model’s reconstruction
+errors are no longer directly comparable with the values used when the
+model was trained.
 
----
+Always use:
 
-# 11. Repository Structure
+    common.preprocessing.wav_to_logmel()
 
-Recommended project structure:
+through the existing scoring pipeline.
 
-```text
-machine-failure-detection/
-│
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── docker-compose.yml
-│
-├── ml/
-│   ├── preprocessing.py
-│   ├── dataset.py
-│   ├── model.py
-│   ├── train.py
-│   ├── evaluate.py
-│   └── inference.py
-│
-├── models/
-│   ├── pump_autoencoder.pt
-│
-├── config/
-│   ├── preprocessing.json
-│   └── thresholds.json
-│
-├── backend/
-│   ├── main.py
-│   ├── routes/
-│   ├── services/
-│   ├── schemas/
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── dashboard/
-│   ├── app.py
-│   ├── components/
-│   └── requirements.txt
-│
-├── evaluation/
-│   ├── metrics.py
-│   ├── confusion_matrix.py
-│   └── results/
-│
-└── notebooks/
-    └── model_development.ipynb
-```
+------------------------------------------------------------------------
 
----
+Model Artifacts
 
-# 12. Parallel Development Plan
+The current pump artifacts are:
 
-The project should NOT be developed completely sequentially.
+    artifacts/
+    ├── manifest.json
+    ├── pump_conv_ae_v1.pt
+    ├── pump_conv_ae_v2.pt
+    └── pump_combiner.pkl
 
-## Week 1
+The manifest currently defines:
 
-### Person A
+    Machine: pump
+    Architecture: supervised_combo
+    Threshold: 0.4832223649199257
 
-```text
-Dataset
- ↓
-Preprocessing
- ↓
-Mel-spectrogram
- ↓
-Autoencoder
- ↓
-Initial experiments
-```
+The threshold is already part of the trained artifact contract. The
+backend does not independently choose a threshold.
 
-### Person B
+------------------------------------------------------------------------
 
-```text
-FastAPI setup
- ↓
-/health
- ↓
-/predict
- ↓
-Dummy model
- ↓
-Docker
-```
+Backend Setup
 
-### Person C
+1. Create a virtual environment
 
-```text
-Dashboard UI
- ↓
-Audio upload
- ↓
-Waveform
- ↓
-Spectrogram
- ↓
-Mock API response
- ↓
-Metrics page
-```
+Windows PowerShell:
 
----
+    python -m venv .venv
 
-## Week 2
+Activate it:
 
-### Person A
+    .\.venv\Scripts\Activate.ps1
 
-Finalize:
+If PowerShell execution policy prevents activation on your machine,
+configure the policy for your current Windows user:
 
-```text
-Model
-Threshold
-Preprocessing config
-Model artifact
-```
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-### Person B
+Then activate the environment again.
 
-Replace:
+2. Install dependencies
 
-```text
-Dummy model
-```
+    pip install -r requirements.txt
 
-with:
+The important ML versions used for the current working environment are:
 
-```text
-Person A's real model
-```
+    numpy==2.0.2
+    scikit-learn==1.6.1
+    torch==2.14.0
 
-Verify preprocessing.
+The current development machine uses:
 
-### Person C
+    Python 3.11.9
+    PyTorch 2.14.0+cu130
+    CUDA runtime 13.0
+    NVIDIA GeForce RTX 4060 Laptop GPU
 
-Connect:
+3. NVIDIA GPU setup
 
-```text
-Dashboard → FastAPI
-```
+For an NVIDIA GPU, install the CUDA-enabled PyTorch 2.14.0 build:
 
----
-
-## Week 3
-
-### Everyone
-
-Integration testing:
-
-```text
-Audio
- ↓
-Dashboard
- ↓
-FastAPI
- ↓
-Preprocessing
- ↓
-Model
- ↓
-Reconstruction Error
- ↓
-Threshold
- ↓
-Prediction
- ↓
-Dashboard
-```
-
-Then run the complete test set.
-
----
-
-# 13. Integration Checklist
-
-## Person A
-
-* [ ] Dataset loading works
-* [ ] Normal/abnormal labels verified
-* [ ] Mel-spectrogram generation works
-* [ ] Input dimensions frozen
-* [ ] Normalization finalized
-* [ ] CNN Autoencoder trained
-* [ ] Reconstruction error calculated
-* [ ] Threshold selected
-* [ ] Model saved
-* [ ] Preprocessing config saved
-* [ ] Threshold saved
-* [ ] Model metadata documented
-
-## Person B
-
-* [ ] FastAPI created
-* [ ] `/health` endpoint
-* [ ] `/predict` endpoint
-* [ ] File upload works
-* [ ] Machine type accepted
-* [ ] Dummy model works
-* [ ] Real model integrated
-* [ ] Same preprocessing as Person A
-* [ ] Threshold loaded from artifact
-* [ ] Error handling implemented
-* [ ] Dockerfile created
-* [ ] Docker Compose works
-
-## Person C
-
-* [ ] Dashboard created
-* [ ] Audio upload works
-* [ ] Audio playback works
-* [ ] Waveform visualization
-* [ ] Mel-spectrogram visualization
-* [ ] Mock API integrated
-* [ ] Real API integrated
-* [ ] Anomaly score displayed
-* [ ] Threshold displayed
-* [ ] Prediction displayed
-* [ ] Precision calculated
-* [ ] Recall calculated
-* [ ] F1-score calculated
-* [ ] ROC-AUC calculated
-* [ ] Confusion matrix generated
-* [ ] Machine-specific results displayed
-
----
-
-# 14. Testing
-
-The final system should be tested at three levels.
-
-### Unit Testing
-
-Test:
-
-```text
-Audio loading
-Spectrogram generation
-Normalization
-Model inference
-Threshold calculation
-API response
-```
-
-### Integration Testing
+    pip uninstall torch -y
+    pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
 
 Verify:
 
-```text
-Dashboard → API → Model
-```
+    python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA runtime:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
 
-and ensure the same audio produces consistent results.
+Expected on a compatible NVIDIA setup:
 
-### End-to-End Testing
+    PyTorch: 2.14.0+cu130
+    CUDA available: True
+    CUDA runtime: 13.0
+    GPU: NVIDIA GeForce RTX 4060 Laptop GPU
 
-Upload an audio file through the dashboard and verify:
+The scoring code automatically selects CUDA when available and falls
+back to CPU otherwise.
 
-```text
-Upload
- ↓
-Preprocessing
- ↓
-Inference
- ↓
-Score
- ↓
-Threshold
- ↓
-Prediction
- ↓
-Visualization
-```
+------------------------------------------------------------------------
 
----
+Running the Backend
 
-# 15. Important Design Decisions
+From the project root:
 
-### Decision 1 — Threshold
+    uvicorn main:app --reload
 
-**Owner: Person A**
+The backend runs at:
 
-Production threshold is selected using the normal validation reconstruction-error distribution, initially targeting the 95th percentile.
+    http://127.0.0.1:8000
 
-Person C can perform threshold sweeps for analysis.
+Interactive API documentation:
 
----
+    http://127.0.0.1:8000/docs
 
-### Decision 2 — Model Architecture
+Swagger UI can be used to test the API without a frontend.
 
-Use **separate Autoencoders per machine type** when multiple machine types are available.
+------------------------------------------------------------------------
 
-Current implementation:
+API Documentation
 
-```text
-Pump → Pump Autoencoder
-```
+GET /health
 
-Future:
+Checks whether the backend is running.
 
-```text
-Pump  → Pump Autoencoder
+Response:
 
-```
+    {
+      "status": "ok"
+    }
 
----
+------------------------------------------------------------------------
 
-### Decision 3 — Preprocessing
+POST /predict
 
-Preprocessing parameters are part of the model artifact.
+Runs anomaly detection on an uploaded pump recording.
 
-They must be identical during:
+Request
 
-```text
-Training
-Validation
-Testing
-API inference
-Dashboard visualization
-```
+Method:
 
----
+    POST
 
-### Decision 4 — Parallel Development
+Content type:
 
-Person B and C should use dummy/mock components initially.
+    multipart/form-data
 
-```text
-Person A → Real ML
-Person B → Mock Model/API
-Person C → Mock API
-```
+Form field:
 
-Then integrate:
+    audio
 
-```text
-Real ML → Real API → Real Dashboard
-```
+The frontend should send the WAV file using the field name audio.
 
----
+Example:
 
-# 16. Expected Final Output
+    POST /predict
+    multipart/form-data
+    audio = pump.wav
 
-The final project should provide a system where a user can upload an industrial machine recording and receive:
+Input requirements
 
-```text
-Machine Type
-Audio Waveform
-Mel-Spectrogram
-Anomaly Score
-Threshold
-Normal / Anomalous Prediction
-```
+-   .wav extension
+-   WAV content type
+-   Maximum upload size: 20 MB
 
-The system should also provide:
+The backend temporarily stores the upload while inference is running and
+deletes the temporary file afterward.
 
-```text
-Precision
-Recall
-F1-score
-ROC-AUC
-Confusion Matrix
-Machine-specific performance
-```
+The uploaded audio is not permanently stored by the backend.
 
----
+Response
 
-# 17. Technologies
+HTTP 200:
 
-### Machine Learning
+    {
+      "machine_type": "pump",
+      "prediction": "anomalous",
+      "anomaly_score": 0.9884138239521334,
+      "threshold": 0.4832223649199257
+    }
 
-* Python
-* PyTorch
-* Librosa
-* NumPy
-* Pandas
-* Scikit-learn
+prediction is either:
 
-### Backend
-
-* FastAPI
-* Uvicorn
-* Python
-* Docker
-
-### Dashboard
-
-Either:
-
-* Streamlit
+    normal
 
 or:
 
-* React
+    anomalous
 
-### Deployment
+anomaly_score is the score produced by the trained inference pipeline.
 
-* Docker
-* Docker Compose
+threshold is the threshold stored in the model artifact.
 
----
+Important frontend integration detail
 
-# 18. Project Goal
+The frontend should NOT send:
 
-The goal is to build a complete, deployable **audio-based industrial machine failure detection system** rather than only a machine learning notebook.
+    machine_type
 
-The final architecture should demonstrate:
+The backend currently assumes:
 
-```text
-Machine Learning
-       +
-Signal Processing
-       +
-Backend Engineering
-       +
-Frontend/Dashboard
-       +
-Model Evaluation
-       +
-Docker Deployment
-```
+    machine_type = pump
 
-This makes the project suitable as an end-to-end ML/software engineering project for a portfolio or resume.
+Only the audio file needs to be sent to /predict.
+
+------------------------------------------------------------------------
+
+Example Frontend Request
+
+Conceptually, the frontend needs to send:
+
+    POST http://127.0.0.1:8000/predict
+
+    multipart/form-data:
+        audio: <selected .wav file>
+
+The frontend should then read the JSON response:
+
+    {
+      "machine_type": "pump",
+      "prediction": "normal",
+      "anomaly_score": 0.1234,
+      "threshold": 0.4832
+    }
+
+and display the relevant information to the user.
+
+CORS has not been configured yet because frontend integration is being
+handled separately. It can be added when the frontend is connected.
+
+------------------------------------------------------------------------
+
+Error Responses
+
+Unsupported file type
+
+HTTP 400:
+
+    {
+      "detail": "Only WAV audio files are supported."
+    }
+
+Invalid file extension
+
+HTTP 400:
+
+    {
+      "detail": "Only .wav audio files are supported."
+    }
+
+File too large
+
+HTTP 413:
+
+    {
+      "detail": "Audio file is too large. Maximum size is 20 MB."
+    }
+
+Inference failure
+
+HTTP 500:
+
+    {
+      "detail": "An error occurred while processing the audio."
+    }
+
+Technical inference errors are printed in the backend terminal for
+debugging but are not exposed directly to the frontend.
+
+------------------------------------------------------------------------
+
+Testing the ML Pipeline Directly
+
+Before debugging the API, the model can be tested independently:
+
+    python -c "from common.scoring import AnomalyScorer; scorer = AnomalyScorer('artifacts'); result = scorer.score(r'PATH_TO_WAV_FILE', 'pump'); print(result)"
+
+Expected structure:
+
+    {
+      'machine_id': 'pump',
+      'architecture': 'supervised_combo',
+      'anomaly_score': ...,
+      'threshold': 0.4832223649199257,
+      'is_anomaly': ...
+    }
+
+The FastAPI endpoint transforms this internal ML result into the
+frontend response format.
+
+------------------------------------------------------------------------
+
+Current Verified Environment
+
+The backend has been tested successfully with:
+
+    Python:        3.11.9
+    NumPy:         2.0.2
+    scikit-learn:  1.6.1
+    PyTorch:       2.14.0+cu130
+    CUDA runtime:  13.0
+    GPU:           NVIDIA GeForce RTX 4060 Laptop GPU
+
+The following have been verified:
+
+-   FastAPI starts successfully.
+-   /health works.
+-   /predict accepts a WAV upload.
+-   WAV validation works.
+-   20 MB upload limit works.
+-   Uploads are processed in chunks.
+-   Uploaded files are stored temporarily.
+-   Temporary files are cleaned up after requests.
+-   UploadFile is closed after processing.
+-   The trained pump artifacts load successfully.
+-   ConvAutoencoder V1 and V2 run on CUDA when available.
+-   The trained combiner loads successfully.
+-   A real WAV has successfully passed through the complete inference
+    pipeline.
+-   FastAPI returns the expected prediction JSON.
+
+A verified test produced:
+
+    anomaly_score: 0.9884138239521334
+    threshold:     0.4832223649199257
+    prediction:    anomalous
+
+------------------------------------------------------------------------
+
+Development Notes for Frontend Integration
+
+The frontend teammate only needs to know:
+
+    Backend URL:
+    http://127.0.0.1:8000
+
+    Prediction endpoint:
+    POST /predict
+
+    File field:
+    audio
+
+    Input:
+    .wav, maximum 20 MB
+
+    Response:
+    machine_type
+    prediction
+    anomaly_score
+    threshold
+
+No model files or ML preprocessing code need to be handled by the
+frontend.
+
+The frontend should not reproduce the anomaly-detection logic. It should
+send the audio to the API and display the returned result.
+
+For local development, if the frontend runs on another port/origin, CORS
+configuration may need to be added to FastAPI during integration.
+
+------------------------------------------------------------------------
+
+Current Limitations
+
+-   Only pump is supported.
+-   Only WAV input is accepted.
+-   The backend is currently intended for local demonstration.
+-   CORS configuration is not yet added.
+-   Concurrency/deployment optimization is not currently a priority.
+-   Dockerization is not currently part of the working local demo flow.
+
+Future machine types can be added by extending the artifact/manifest
+structure and backend interface, but the current API should remain
+pump-only until those models are actually available.
+
+------------------------------------------------------------------------
+
+Team Integration Boundary
+
+ML layer
+
+Owned by the ML implementation:
+
+    common/preprocessing.py
+    common/models.py
+    common/scoring.py
+    artifacts/
+
+Backend layer
+
+Owned by the FastAPI implementation:
+
+    main.py
+
+Responsibilities:
+
+    receive audio
+    validate upload
+    temporarily store audio
+    call AnomalyScorer
+    transform ML result
+    return JSON
+    clean up temporary resources
+
+Frontend layer
+
+The frontend should:
+
+    select/upload WAV
+    POST audio to /predict
+    receive JSON
+    display prediction
+    display anomaly score
+    display threshold
+
+The frontend does not need to know the internal model architecture.
+
+------------------------------------------------------------------------
+
+Quick Start
+
+    # Activate environment
+    .\.venv\Scripts\Activate.ps1
+
+    # Install dependencies
+    pip install -r requirements.txt
+
+    # For NVIDIA GPU
+    pip uninstall torch -y
+    pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
+
+    # Run API
+    uvicorn main:app --reload
+
+    # Open Swagger
+    http://127.0.0.1:8000/docs
+
+Upload a pump .wav through POST /predict to test the complete system.

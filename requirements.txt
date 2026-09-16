@@ -1,0 +1,19 @@
+# ML / inference
+numpy==2.0.2
+librosa==0.10.2
+soundfile==0.12.1
+torch==2.14.0
+scikit-learn==1.6.1
+
+# Training / evaluation
+pandas==2.2.2
+matplotlib==3.9.0
+tqdm==4.66.4
+
+# Backend
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# Dashboard
+streamlit==1.36.0
