@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MIMII Acoustic Console</title>
+  <meta name="description" content="Drop a pump recording and check it against the MIMII anomaly model.">
+  <meta name="color-scheme" content="dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="side">
+      <div class="brand">
+        <span>MIMII</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5c.6 5.4 5 9.9 10.5 10.5-5.5.6-9.9 5-10.5 10.5-.6-5.5-5-9.9-10.5-10.5C7 11.4 11.4 7 12 1.5z"/></svg>
+      </div>
+      <nav class="nav" aria-label="Views">
+        <button class="nav-item" type="button" data-view="console" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+          Console
+        </button>
+        <button class="nav-item" type="button" data-view="history">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/><path d="M12 8v4.5l3 2"/></svg>
+          History <span class="nav-count" id="nav-count" hidden>0</span>
+        </button>
+        <button class="nav-item" type="button" data-view="model">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M7.5 15h9"/></svg>
+          Model
+        </button>
+      </nav>
+      <label class="load-btn">
+        <input type="file" id="file-input" accept=".wav,audio/wav" multiple>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Load recordings</span>
+      </label>
+      <button class="api" id="status" type="button" data-state="checking" title="Re-check API connection">
+        <span class="api-lamp" aria-hidden="true"></span>
+        <span id="status-text">Connecting</span>
+      </button>
+    </aside>
+
+    <main class="main">
+      <!-- ========== CONSOLE VIEW ========== -->
+      <section class="view" id="view-console" data-view="console">
+        <div class="tiles">
+          <div class="tile">
+            <span class="tile-l">Active device</span>
+            <span class="tile-v">Pump</span>
+            <svg class="tile-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5.5 5.5"/></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-l">Anomaly score</span>
+            <span class="tile-v" id="t-score">--</span>
+            <svg class="tile-i i-pink" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h3l2-5 3 10 3-14 3 12 2-3h4"/></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-l">Inference</span>
+            <span class="tile-v" id="t-time">--</span>
+            <svg class="tile-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-l">Anomaly threshold</span>
+            <span class="tile-v" id="t-limit">--</span>
+            <svg class="tile-i i-amber" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15h18"/><path d="M6 15V9M10 15V5M14 15v-3M18 15V8" opacity=".6"/></svg>
+          </div>
+        </div>
+
+        <div class="stage">
+          <!-- Hologram -->
+          <div class="holo" id="holo">
+            <canvas id="holo-canvas" aria-label="3D model of the pump being inspected" role="img"></canvas>
+            <div class="holo-empty" id="holo-empty">
+              <p class="holo-cta">Drop a pump recording</p>
+              <p class="holo-sub">.wav, 10 seconds, up to 20 MB. Drop several to queue them.</p>
+            </div>
+            <p class="holo-cap" id="holo-cap">Sensor array, 8 channels</p>
+          </div>
+
+          <!-- Traces -->
+          <div class="traces">
+            <div class="trace-block">
+              <div class="trace-head"><span>Sound intensity</span><span class="trace-aux" id="clock">0:00.0</span></div>
+              <div class="glass trace-box">
+                <canvas id="wave" class="wave"></canvas>
+                <div class="ph" data-ph></div>
+                <div class="seekzone" data-seek role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"></div>
+              </div>
+            </div>
+            <div class="trace-block">
+              <div class="trace-head"><span>Mel spectrogram</span><span class="trace-aux">128 bands, 0 to 8 kHz</span></div>
+              <div class="glass trace-box spec-box">
+                <canvas id="spec" class="spec" width="313" height="128"></canvas>
+                <div class="scan" aria-hidden="true"></div>
+                <div class="ph" data-ph></div>
+                <div class="seekzone" data-seek aria-hidden="true"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Device rail -->
+          <ul class="devices" aria-label="Machines">
+            <li class="dev is-active" id="dev-pump">
+              <span class="dev-name">Pump</span>
+              <span class="dev-state" id="dev-pump-state">Waiting for audio</span>
+              <canvas class="dev-wave" id="dev-pump-wave"></canvas>
+            </li>
+            <li class="dev is-off"><span class="dev-name">Fan</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
+            <li class="dev is-off"><span class="dev-name">Valve</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
+            <li class="dev is-off"><span class="dev-name">Slide rail</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
+          </ul>
+        </div>
+
+        <div class="identity" id="identity" data-state="idle" aria-live="polite">
+          <div class="id-text">
+            <h1 class="id-title">Industrial Pump</h1>
+            <div class="id-meta">
+              <span class="id-file" id="id-file">No recording loaded</span>
+              <span class="pill" id="pill">Idle</span>
+              <button class="play" id="btn-play" type="button" disabled aria-label="Play recording">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+              </button>
+            </div>
+            <p class="id-note" id="id-note">Scores at or above the threshold are flagged as abnormal.</p>
+          </div>
+          <div class="rings">
+            <figure class="ring" id="ring-score">
+              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/><line class="ring-tick" id="ring-tick" x1="69" y1="40" x2="79" y2="40"/></svg>
+              <figcaption><b id="ring-score-v">--</b><span>Score</span></figcaption>
+            </figure>
+            <figure class="ring ring-margin" id="ring-margin">
+              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/></svg>
+              <figcaption><b id="ring-margin-v">--</b><span>Margin</span></figcaption>
+            </figure>
+            <figure class="ring ring-auc" id="ring-auc">
+              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/></svg>
+              <figcaption><b id="ring-auc-v">--</b><span>Model AUC</span></figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="bottom">
+          <div class="bottom-block">
+            <div class="trace-head"><span>Loudness timeline</span><span class="trace-aux">0 to 10 s</span></div>
+            <div class="timeline-box">
+              <canvas id="timeline" class="timeline"></canvas>
+              <div class="ph" data-ph></div>
+              <div class="seekzone" data-seek aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="bottom-block">
+            <div class="trace-head"><span>Frequency profile</span><span class="trace-aux" id="peak">Average over the clip</span></div>
+            <canvas id="profile" class="profile"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== HISTORY VIEW ========== -->
+      <section class="view" id="view-history" data-view="history" hidden>
+        <header class="view-head">
+          <h2>Checked this session</h2>
+          <p class="view-sub" id="tally">Recordings you check appear here. Select one to open it in the console.</p>
+        </header>
+        <ol class="log" id="log-list"></ol>
+      </section>
+
+      <!-- ========== MODEL VIEW ========== -->
+      <section class="view" id="view-model" data-view="model" hidden>
+        <header class="view-head">
+          <h2>How reliable is the pump model</h2>
+          <p class="view-sub" id="model-sub">Measured on pump clips the model never saw during training.</p>
+        </header>
+        <div class="model-grid">
+          <div class="glass kpis">
+            <div><b id="k-auc">--</b><span>ROC-AUC</span></div>
+            <div><b id="k-p">--</b><span>Precision</span></div>
+            <div><b id="k-r">--</b><span>Recall</span></div>
+            <div><b id="k-f1">--</b><span>F1 score</span></div>
+          </div>
+          <figure class="glass matrix">
+            <figcaption>Test clips, by what they were and what the model called them</figcaption>
+            <div class="mx">
+              <span></span><span class="mx-h">Called normal</span><span class="mx-h">Called abnormal</span>
+              <span class="mx-r">Normal</span><b class="mx-c ok" id="mx-tn">--</b><b class="mx-c bad" id="mx-fp">--</b>
+              <span class="mx-r">Abnormal</span><b class="mx-c bad" id="mx-fn">--</b><b class="mx-c ok" id="mx-tp">--</b>
+            </div>
+          </figure>
+          <div class="glass approaches">
+            <h3>Approaches compared</h3>
+            <p class="view-sub">Cross-validated ROC-AUC. Whiskers show the spread across folds.</p>
+            <ul class="bars" id="bars"></ul>
+          </div>
+          <div class="glass pipeline">
+            <h3>What happens to a recording</h3>
+            <ol class="steps">
+              <li><b>Resample and trim</b><span>Mixed to mono at 16 kHz, cut or padded to 10 seconds</span></li>
+              <li><b>Mel spectrogram</b><span>128 bands by 313 frames, normalised with training statistics</span></li>
+              <li><b>Two autoencoders</b><span>Each tries to rebuild the spectrogram of a healthy pump</span></li>
+              <li><b>Error features</b><span>Mean, max, spread and 90th percentile of the rebuild error</span></li>
+              <li><b>Classifier vote</b><span id="vote-desc">Three classifiers vote, weighted by validation AUC</span></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="dropveil" aria-hidden="true"><div><p>Release to inspect</p><span>.wav files go straight to the pump model</span></div></div>
+  <div class="toast" id="toast" role="alert" hidden></div>
+  <audio id="audio" preload="auto"></audio>
+
+  <script src="dsp.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
