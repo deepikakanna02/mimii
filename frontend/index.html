@@ -8,7 +8,8 @@
   <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
@@ -19,8 +20,8 @@
     <!-- Sidebar -->
     <aside class="side">
       <div class="brand">
-        <span>MIMII</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5c.6 5.4 5 9.9 10.5 10.5-5.5.6-9.9 5-10.5 10.5-.6-5.5-5-9.9-10.5-10.5C7 11.4 11.4 7 12 1.5z"/></svg>
+        <img src="assets/wordmark.svg" alt="MIMII" width="104" height="42">
+        <span class="brand-sub">Machine sound inspection</span>
       </div>
       <nav class="nav" aria-label="Views">
         <button class="nav-item" type="button" data-view="console" aria-current="page">
@@ -52,30 +53,26 @@
         <div class="tiles">
           <div class="tile">
             <span class="tile-l">Active device</span>
-            <span class="tile-v">Pump</span>
-            <svg class="tile-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5.5 5.5"/></svg>
+            <span class="tile-v" id="t-device">Pump</span>
           </div>
           <div class="tile">
             <span class="tile-l">Anomaly score</span>
             <span class="tile-v" id="t-score">--</span>
-            <svg class="tile-i i-pink" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h3l2-5 3 10 3-14 3 12 2-3h4"/></svg>
           </div>
           <div class="tile">
             <span class="tile-l">Inference</span>
             <span class="tile-v" id="t-time">--</span>
-            <svg class="tile-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
           </div>
           <div class="tile">
             <span class="tile-l">Anomaly threshold</span>
             <span class="tile-v" id="t-limit">--</span>
-            <svg class="tile-i i-amber" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15h18"/><path d="M6 15V9M10 15V5M14 15v-3M18 15V8" opacity=".6"/></svg>
           </div>
         </div>
 
         <div class="stage">
           <!-- Hologram -->
           <div class="holo" id="holo">
-            <canvas id="holo-canvas" aria-label="3D model of the pump being inspected" role="img"></canvas>
+            <canvas id="holo-canvas" aria-label="3D model of the selected machine. Drag to rotate." role="img"></canvas>
             <div class="holo-empty" id="holo-empty">
               <p class="holo-cta">Drop a pump recording</p>
               <p class="holo-sub">.wav, 10 seconds, up to 20 MB. Drop several to queue them.</p>
@@ -106,20 +103,20 @@
 
           <!-- Device rail -->
           <ul class="devices" aria-label="Machines">
-            <li class="dev is-active" id="dev-pump">
+            <li><button class="dev is-selected" type="button" data-machine="pump" id="dev-pump" aria-pressed="true">
               <span class="dev-name">Pump</span>
-              <span class="dev-state" id="dev-pump-state">Waiting for audio</span>
+              <span class="dev-state" id="dev-pump-state">Model ready</span>
               <canvas class="dev-wave" id="dev-pump-wave"></canvas>
-            </li>
-            <li class="dev is-off"><span class="dev-name">Fan</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
-            <li class="dev is-off"><span class="dev-name">Valve</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
-            <li class="dev is-off"><span class="dev-name">Slide rail</span><span class="dev-state">No model yet</span><span class="dev-flat"></span></li>
+            </button></li>
+            <li><button class="dev is-off" type="button" data-machine="fan" aria-pressed="false"><span class="dev-name">Fan</span><span class="dev-state">Axial duct fan</span><span class="dev-flat"></span></button></li>
+            <li><button class="dev is-off" type="button" data-machine="valve" aria-pressed="false"><span class="dev-name">Valve</span><span class="dev-state">Solenoid valve</span><span class="dev-flat"></span></button></li>
+            <li><button class="dev is-off" type="button" data-machine="slider" aria-pressed="false"><span class="dev-name">Slide rail</span><span class="dev-state">Linear slide</span><span class="dev-flat"></span></button></li>
           </ul>
         </div>
 
         <div class="identity" id="identity" data-state="idle" aria-live="polite">
           <div class="id-text">
-            <h1 class="id-title">Industrial Pump</h1>
+            <h1 class="id-title" id="id-title">Industrial Pump</h1>
             <div class="id-meta">
               <span class="id-file" id="id-file">No recording loaded</span>
               <span class="pill" id="pill">Idle</span>

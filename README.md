@@ -1,567 +1,240 @@
-MIMII Machine Failure Detection Backend
+<p align="center"><img src="docs/logo.png" alt="MIMII" width="360"></p>
 
-Audio-based industrial machine failure detection using the MIMII
-dataset, CNN autoencoders, a trained ensemble/combiner, and a FastAPI
-inference service.
+# MIMII Machine Failure Detection
 
-Current Scope
+Detects faulty industrial pumps from their sound. Upload a 10 second `.wav` recording and the system tells you whether the pump sounds healthy or abnormal, using CNN autoencoders trained on the [MIMII dataset](https://zenodo.org/records/3384388), a trained classifier vote, and a FastAPI backend with a web dashboard.
 
-The current implementation supports pump only.
+Course project, CSE_3125.
 
-The backend accepts a .wav recording, runs the trained pump
-anomaly-detection pipeline, and returns an anomaly score and prediction.
+![Dashboard](docs/dashboard.png)
 
-Current request flow:
+## Quick start
 
-Audio (.wav) ↓ FastAPI ↓ Temporary file ↓ Shared preprocessing
-(common/preprocessing.py) ↓ ConvAutoencoder V1 + ConvAutoencoder V2 ↓
-Trained combiner (pump_combiner.pkl) ↓ Anomaly score + threshold ↓
-Normal / Anomalous ↓ JSON response
+From the project root (Windows PowerShell shown; use `source .venv/bin/activate` on macOS/Linux):
 
-The backend does not currently require the frontend to send a machine
-type. The machine is fixed to pump in the current implementation.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
 
-------------------------------------------------------------------------
+Then open **http://127.0.0.1:8000/** for the dashboard, or **http://127.0.0.1:8000/docs** for Swagger.
 
-Project Structure
+Drop one or more pump `.wav` files on the page. Each one is scored and listed under History.
 
-Current repository structure:
+> The first install takes a while. PyTorch is large, and on Windows the install step can sit silently for 5 to 15 minutes. Let it finish.
 
-    mimii/
-    ├── artifacts/
-    │   ├── cv_metrics_summary.csv
-    │   ├── manifest.json
-    │   ├── pump_combiner.pkl
-    │   ├── pump_conv_ae_v1.pt
-    │   └── pump_conv_ae_v2.pt
-    │
-    ├── common/
-    │   ├── __init__.py
-    │   ├── models.py
-    │   ├── preprocessing.py
-    │   └── scoring.py
-    │
-    ├── main.py
-    ├── requirements.txt
-    ├── README.md
-    └── notebookc71a97b3e7.ipynb
+## Requirements
 
-Important files
+- Python 3.11, 3.12 or 3.13
+- About 3 GB of disk space for the virtual environment
+- A GPU is optional. The scorer uses CUDA when available and falls back to CPU automatically.
 
-main.py - FastAPI application. - Defines /health and /predict. - Loads
-AnomalyScorer once when the application starts. - Handles upload
-validation, temporary-file management, inference, and API response
-formatting.
+`scikit-learn` must stay at **1.6.1**. The trained combiner (`artifacts/pump_combiner.pkl`) was pickled with that version and will not load reliably with another.
 
-common/preprocessing.py - Single source of truth for audio
-preprocessing. - Do not reimplement the preprocessing in the backend.
+<details>
+<summary>Optional: NVIDIA GPU setup</summary>
 
-common/models.py - Contains the CNN autoencoder architectures. -
-Provides build_model() used by the scoring pipeline.
+Install the CUDA build of PyTorch after the normal install:
 
-common/scoring.py - Complete inference pipeline. - Loads the model
-artifacts from artifacts/. - Runs preprocessing, model inference,
-feature extraction, and the trained combiner. - The backend calls this
-code instead of duplicating ML logic.
+```powershell
+pip uninstall torch -y
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+```
 
-artifacts/manifest.json - Defines the pump model configuration,
-preprocessing parameters, model architecture, weights, threshold, and
-combiner information.
+Check it:
 
-------------------------------------------------------------------------
+```powershell
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
 
-ML Inference Pipeline
+The backend was verified on an RTX 4060 Laptop GPU with PyTorch 2.14.0+cu130 and on CPU.
+</details>
 
-The current production inference architecture is:
+<details>
+<summary>PowerShell will not activate the venv</summary>
 
-    Input WAV
-       ↓
-    Preprocessing
-       ↓
-    ConvAE V1 ──┐
-                ├── reconstruction-error features
-    ConvAE V2 ──┘
-       ↓
-    pump_combiner.pkl
-       ↓
-    anomaly_score
-       ↓
-    threshold comparison
-       ↓
-    normal / anomalous
+Run this once, then activate again:
 
-The architecture recorded in the current manifest is:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+</details>
 
-    supervised_combo
+## How it works
 
-with:
+```
+.wav upload
+  -> preprocessing        mono, 16 kHz, 10 s, log-mel spectrogram (128 x 313), normalised
+  -> ConvAE v1 + ConvAE v2   each tries to rebuild the spectrogram of a healthy pump
+  -> error features       mean, max, std and 90th percentile of per-frame rebuild error
+  -> classifier vote      logistic regression, random forest, gradient boosting (AUC-weighted)
+  -> anomaly score        compared with the trained threshold (0.4832)
+  -> normal / anomalous
+```
 
-    conv_ae_v1
-    conv_ae_v2
+Only **pump** is scored right now. Fan, valve and slide rail can be opened in the dashboard as 3D views until their models are trained.
 
-as component models.
+### Model performance (pump)
 
-The backend must use common.scoring.AnomalyScorer for inference. Do not
-create a separate preprocessing or scoring implementation in main.py.
+| Metric | Value |
+|---|---|
+| ROC-AUC, held-out test set | 0.977 |
+| Precision / Recall / F1 at threshold | 0.908 / 0.908 / 0.908 |
+| Cross-validated ROC-AUC | 0.947 ± 0.016 |
 
-------------------------------------------------------------------------
+Approaches compared during training (cross-validated ROC-AUC):
 
-Preprocessing Contract
+| Approach | AUC |
+|---|---|
+| Two autoencoders + classifier vote (**in use**) | 0.947 |
+| Autoencoder v2 alone | 0.845 |
+| Averaged autoencoders | 0.662 |
+| Autoencoder v1 alone | 0.362 |
 
-The current pump preprocessing configuration is stored in
-artifacts/manifest.json.
+## Project structure
 
-Current values:
-
-    Sample rate:       16000 Hz
-    FFT size:          2048
-    Hop length:        512
-    Mel bins:          128
-    Minimum frequency: 0 Hz
-    Maximum frequency: 8000 Hz
-    Power:             2.0
-    Top dB:            80
-    Clip duration:     10 seconds
-    Fixed frames:      313
-    Mono:              Yes
-    Trim silence:      Yes
-
-The resulting log-Mel spectrogram has shape:
-
-    (128, 313)
-
-Normalization uses the statistics stored in the manifest.
-
-Important
-
-Preprocessing is part of the model inference contract.
-
-If the preprocessing parameters change, the model’s reconstruction
-errors are no longer directly comparable with the values used when the
-model was trained.
-
-Always use:
-
-    common.preprocessing.wav_to_logmel()
-
-through the existing scoring pipeline.
-
-------------------------------------------------------------------------
-
-Model Artifacts
-
-The current pump artifacts are:
-
-    artifacts/
-    ├── manifest.json
-    ├── pump_conv_ae_v1.pt
-    ├── pump_conv_ae_v2.pt
-    └── pump_combiner.pkl
-
-The manifest currently defines:
-
-    Machine: pump
-    Architecture: supervised_combo
-    Threshold: 0.4832223649199257
-
-The threshold is already part of the trained artifact contract. The
-backend does not independently choose a threshold.
-
-------------------------------------------------------------------------
-
-Backend Setup
-
-1. Create a virtual environment
-
-Windows PowerShell:
-
-    python -m venv .venv
-
-Activate it:
-
-    .\.venv\Scripts\Activate.ps1
-
-If PowerShell execution policy prevents activation on your machine,
-configure the policy for your current Windows user:
-
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-Then activate the environment again.
-
-2. Install dependencies
-
-    pip install -r requirements.txt
-
-The important ML versions used for the current working environment are:
-
-    numpy==2.0.2
-    scikit-learn==1.6.1
-    torch==2.14.0
-
-The current development machine uses:
-
-    Python 3.11.9
-    PyTorch 2.14.0+cu130
-    CUDA runtime 13.0
-    NVIDIA GeForce RTX 4060 Laptop GPU
-
-3. NVIDIA GPU setup
-
-For an NVIDIA GPU, install the CUDA-enabled PyTorch 2.14.0 build:
-
-    pip uninstall torch -y
-    pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
-
-Verify:
-
-    python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA runtime:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
-
-Expected on a compatible NVIDIA setup:
-
-    PyTorch: 2.14.0+cu130
-    CUDA available: True
-    CUDA runtime: 13.0
-    GPU: NVIDIA GeForce RTX 4060 Laptop GPU
-
-The scoring code automatically selects CUDA when available and falls
-back to CPU otherwise.
-
-------------------------------------------------------------------------
-
-Running the Backend
-
-From the project root:
-
-    uvicorn main:app --reload
-
-The backend runs at:
-
-    http://127.0.0.1:8000
-
-Interactive API documentation:
-
-    http://127.0.0.1:8000/docs
-
-Swagger UI can be used to test the API without a frontend.
-
-------------------------------------------------------------------------
-
-API Documentation
-
-GET /health
-
-Checks whether the backend is running.
-
-Response:
-
-    {
-      "status": "ok"
-    }
-
-------------------------------------------------------------------------
-
-POST /predict
-
-Runs anomaly detection on an uploaded pump recording.
-
-Request
-
-Method:
-
-    POST
-
-Content type:
-
-    multipart/form-data
-
-Form field:
-
-    audio
-
-The frontend should send the WAV file using the field name audio.
+```
+mimii/
+├── artifacts/                 trained model files (owned by the ML layer)
+│   ├── manifest.json          preprocessing config, threshold, metrics
+│   ├── pump_conv_ae_v1.pt
+│   ├── pump_conv_ae_v2.pt
+│   ├── pump_combiner.pkl
+│   └── cv_metrics_summary.csv
+├── common/                    ML code, single source of truth
+│   ├── preprocessing.py       wav_to_logmel()
+│   ├── models.py              ConvAutoencoderV1 / V2, build_model()
+│   └── scoring.py             AnomalyScorer, the full inference pipeline
+├── frontend/                  dashboard, plain HTML/CSS/JS, no build step
+│   ├── index.html
+│   ├── styles.css
+│   ├── app.js                 API calls, upload queue, playback, charts
+│   ├── dsp.js                 display-only waveform and spectrogram
+│   ├── holo.js                3D wireframe machines (Three.js)
+│   ├── assets/                logo, favicon, app icon
+│   └── vendor/                Three.js, bundled so the demo works offline
+├── docs/                      screenshots
+├── main.py                    FastAPI app, also serves frontend/
+├── requirements.txt
+└── notebookc71a97b3e7.ipynb   training notebook
+```
+
+## Dashboard
+
+Served by FastAPI at `/`, so nothing extra to run.
+
+- Drag and drop or pick several `.wav` files. They are checked one at a time.
+- Shows the anomaly score, threshold, margin and inference time, plus a healthy or anomaly state on the 3D pump.
+- Waveform, mel spectrogram, loudness timeline and frequency profile stay in sync with audio playback. Click or drag to seek; Space plays and pauses.
+- **History** lists every clip checked in the session.
+- **Model** shows the metrics, confusion matrix and approach comparison above, read live from the artifacts.
+- Select a machine card to switch the 3D view between pump, fan, solenoid valve and slide rail. Each has its own moving parts (impeller, rotor, plunger, carriage). Only the pump is scored; the others are previews.
+
+The charts are drawn in the browser for display only, using the same mel settings as the model. The decision always comes from the backend.
+
+### Running the frontend on its own server
+
+Useful with VS Code Live Server (port 5500) or Vite (port 5173). The page then calls `http://127.0.0.1:8000` automatically. CORS already allows `localhost` on ports 5500, 5173 and 8000. To allow others:
+
+```powershell
+$env:CORS_ORIGINS="http://localhost:3000"; uvicorn main:app --reload
+```
+
+To point the page at a backend on another machine, add `?api=` to the URL:
+
+```
+index.html?api=http://192.168.1.20:8000
+```
+
+## API
+
+Base URL: `http://127.0.0.1:8000`
+
+### `GET /health`
+
+```json
+{ "status": "ok", "machines": ["pump"], "device": "cpu" }
+```
+
+### `POST /predict`
+
+`multipart/form-data` with one field, `audio`, holding a `.wav` file up to 20 MB. Do **not** send a machine type; the backend uses pump.
+
+```json
+{
+  "machine_type": "pump",
+  "prediction": "anomalous",
+  "anomaly_score": 0.9884,
+  "threshold": 0.4832,
+  "inference_ms": 42.3
+}
+```
+
+`prediction` is `normal` or `anomalous`. A clip is anomalous when `anomaly_score >= threshold`.
 
 Example:
 
-    POST /predict
-    multipart/form-data
-    audio = pump.wav
+```powershell
+curl.exe -F "audio=@pump.wav;type=audio/wav" http://127.0.0.1:8000/predict
+```
 
-Input requirements
+Errors:
 
--   .wav extension
--   WAV content type
--   Maximum upload size: 20 MB
+| Status | When |
+|---|---|
+| 400 | File is not a `.wav`, or its content type is not WAV |
+| 413 | File is larger than 20 MB |
+| 500 | Inference failed. Details are printed in the backend terminal, not sent to the client |
 
-The backend temporarily stores the upload while inference is running and
-deletes the temporary file afterward.
+Uploads are written to a temporary file for inference and deleted straight after. Nothing is stored.
 
-The uploaded audio is not permanently stored by the backend.
+### `GET /model-info`
 
-Response
+Read-only model card used by the dashboard: architecture, threshold, ROC-AUC, precision, recall, F1, confusion matrix, preprocessing config, and the cross-validated comparison from `cv_metrics_summary.csv`.
 
-HTTP 200:
+## Testing the ML pipeline without the API
 
-    {
-      "machine_type": "pump",
-      "prediction": "anomalous",
-      "anomaly_score": 0.9884138239521334,
-      "threshold": 0.4832223649199257
-    }
+```powershell
+python -c "from common.scoring import AnomalyScorer; s = AnomalyScorer('artifacts'); print(s.score(r'PATH_TO_WAV', 'pump'))"
+```
 
-prediction is either:
+Returns `machine_id`, `architecture`, `anomaly_score`, `threshold` and `is_anomaly`.
 
-    normal
+## Rules for contributors
 
-or:
+- **Preprocessing is part of the model contract.** Always go through `common.preprocessing.wav_to_logmel()` via `AnomalyScorer`. Changing any parameter in `manifest.json` makes reconstruction errors meaningless, and nothing will raise an error to warn you.
+- **The threshold belongs to the artifact.** The backend and frontend never choose their own.
+- **`main.py` calls `AnomalyScorer`; it never reimplements scoring.** The frontend only calls the API.
 
-    anomalous
+| Layer | Files | Responsibility |
+|---|---|---|
+| ML | `common/`, `artifacts/`, notebook | preprocessing, models, training, threshold |
+| Backend | `main.py` | upload validation, temp files, calling the scorer, JSON responses, serving the dashboard |
+| Frontend | `frontend/` | upload, display, playback, visualisation |
 
-anomaly_score is the score produced by the trained inference pipeline.
+## Troubleshooting
 
-threshold is the threshold stored in the model artifact.
+| Problem | Fix |
+|---|---|
+| `pip install` stuck on "Preparing metadata" for numpy | An old pinned version has no wheel for your Python. Pull the latest `requirements.txt`, which uses version ranges. |
+| Install sits silently after "Installing collected packages" | Normal on Windows while PyTorch installs. Wait. |
+| Dashboard says "API offline" | Start `uvicorn main:app --reload` from the project root, then select the status at the bottom of the sidebar to retry. |
+| Combiner fails to load / sklearn warning | Run `pip install scikit-learn==1.6.1`. |
+| Every clip scores as anomalous | Use real MIMII pump recordings. Synthetic or phone recordings sound nothing like the training data. |
 
-Important frontend integration detail
+## Current limitations
 
-The frontend should NOT send:
+- Pump only.
+- WAV input only, analysed for the first 10 seconds.
+- Built for local demonstration: one request at a time, no authentication.
+- Not yet Dockerized.
 
-    machine_type
+## Team
 
-The backend currently assumes:
+Suryansh Verma, Deepika Kanna, Divyam Saluja, Shiven Puri.
 
-    machine_type = pump
+## License
 
-Only the audio file needs to be sent to /predict.
-
-------------------------------------------------------------------------
-
-Example Frontend Request
-
-Conceptually, the frontend needs to send:
-
-    POST http://127.0.0.1:8000/predict
-
-    multipart/form-data:
-        audio: <selected .wav file>
-
-The frontend should then read the JSON response:
-
-    {
-      "machine_type": "pump",
-      "prediction": "normal",
-      "anomaly_score": 0.1234,
-      "threshold": 0.4832
-    }
-
-and display the relevant information to the user.
-
-CORS has not been configured yet because frontend integration is being
-handled separately. It can be added when the frontend is connected.
-
-------------------------------------------------------------------------
-
-Error Responses
-
-Unsupported file type
-
-HTTP 400:
-
-    {
-      "detail": "Only WAV audio files are supported."
-    }
-
-Invalid file extension
-
-HTTP 400:
-
-    {
-      "detail": "Only .wav audio files are supported."
-    }
-
-File too large
-
-HTTP 413:
-
-    {
-      "detail": "Audio file is too large. Maximum size is 20 MB."
-    }
-
-Inference failure
-
-HTTP 500:
-
-    {
-      "detail": "An error occurred while processing the audio."
-    }
-
-Technical inference errors are printed in the backend terminal for
-debugging but are not exposed directly to the frontend.
-
-------------------------------------------------------------------------
-
-Testing the ML Pipeline Directly
-
-Before debugging the API, the model can be tested independently:
-
-    python -c "from common.scoring import AnomalyScorer; scorer = AnomalyScorer('artifacts'); result = scorer.score(r'PATH_TO_WAV_FILE', 'pump'); print(result)"
-
-Expected structure:
-
-    {
-      'machine_id': 'pump',
-      'architecture': 'supervised_combo',
-      'anomaly_score': ...,
-      'threshold': 0.4832223649199257,
-      'is_anomaly': ...
-    }
-
-The FastAPI endpoint transforms this internal ML result into the
-frontend response format.
-
-------------------------------------------------------------------------
-
-Current Verified Environment
-
-The backend has been tested successfully with:
-
-    Python:        3.11.9
-    NumPy:         2.0.2
-    scikit-learn:  1.6.1
-    PyTorch:       2.14.0+cu130
-    CUDA runtime:  13.0
-    GPU:           NVIDIA GeForce RTX 4060 Laptop GPU
-
-The following have been verified:
-
--   FastAPI starts successfully.
--   /health works.
--   /predict accepts a WAV upload.
--   WAV validation works.
--   20 MB upload limit works.
--   Uploads are processed in chunks.
--   Uploaded files are stored temporarily.
--   Temporary files are cleaned up after requests.
--   UploadFile is closed after processing.
--   The trained pump artifacts load successfully.
--   ConvAutoencoder V1 and V2 run on CUDA when available.
--   The trained combiner loads successfully.
--   A real WAV has successfully passed through the complete inference
-    pipeline.
--   FastAPI returns the expected prediction JSON.
-
-A verified test produced:
-
-    anomaly_score: 0.9884138239521334
-    threshold:     0.4832223649199257
-    prediction:    anomalous
-
-------------------------------------------------------------------------
-
-Development Notes for Frontend Integration
-
-The frontend teammate only needs to know:
-
-    Backend URL:
-    http://127.0.0.1:8000
-
-    Prediction endpoint:
-    POST /predict
-
-    File field:
-    audio
-
-    Input:
-    .wav, maximum 20 MB
-
-    Response:
-    machine_type
-    prediction
-    anomaly_score
-    threshold
-
-No model files or ML preprocessing code need to be handled by the
-frontend.
-
-The frontend should not reproduce the anomaly-detection logic. It should
-send the audio to the API and display the returned result.
-
-For local development, if the frontend runs on another port/origin, CORS
-configuration may need to be added to FastAPI during integration.
-
-------------------------------------------------------------------------
-
-Current Limitations
-
--   Only pump is supported.
--   Only WAV input is accepted.
--   The backend is currently intended for local demonstration.
--   CORS configuration is not yet added.
--   Concurrency/deployment optimization is not currently a priority.
--   Dockerization is not currently part of the working local demo flow.
-
-Future machine types can be added by extending the artifact/manifest
-structure and backend interface, but the current API should remain
-pump-only until those models are actually available.
-
-------------------------------------------------------------------------
-
-Team Integration Boundary
-
-ML layer
-
-Owned by the ML implementation:
-
-    common/preprocessing.py
-    common/models.py
-    common/scoring.py
-    artifacts/
-
-Backend layer
-
-Owned by the FastAPI implementation:
-
-    main.py
-
-Responsibilities:
-
-    receive audio
-    validate upload
-    temporarily store audio
-    call AnomalyScorer
-    transform ML result
-    return JSON
-    clean up temporary resources
-
-Frontend layer
-
-The frontend should:
-
-    select/upload WAV
-    POST audio to /predict
-    receive JSON
-    display prediction
-    display anomaly score
-    display threshold
-
-The frontend does not need to know the internal model architecture.
-
-------------------------------------------------------------------------
-
-Quick Start
-
-    # Activate environment
-    .\.venv\Scripts\Activate.ps1
-
-    # Install dependencies
-    pip install -r requirements.txt
-
-    # For NVIDIA GPU
-    pip uninstall torch -y
-    pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
-
-    # Run API
-    uvicorn main:app --reload
-
-    # Open Swagger
-    http://127.0.0.1:8000/docs
-
-Upload a pump .wav through POST /predict to test the complete system.
+MIT, see [LICENSE](LICENSE).

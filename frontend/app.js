@@ -26,7 +26,7 @@ const el = {
 };
 const consoleView = $("view-console");
 
-const state = { clips: [], current: null, threshold: null, online: false, seq: 0, busy: false, view: "console" };
+const state = { clips: [], current: null, threshold: null, online: false, seq: 0, busy: false, view: "console", machine: "pump", machines: ["pump"] };
 const fmt = (v, d = 3) => (v == null || Number.isNaN(v) ? "--" : Number(v).toFixed(d));
 const pct = v => `${Math.max(0, Math.min(1, v)) * 100}%`;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -44,6 +44,50 @@ function showView(name) {
     el.bars.querySelectorAll(".bar").forEach((b, i) => setTimeout(() => (b.querySelector(".bar-fill").style.width = b.dataset.w), 80 + i * 90)));
   else el.bars.querySelectorAll(".bar-fill").forEach(f => (f.style.width = 0));
   if (name === "console") requestAnimationFrame(redrawAll);
+}
+
+// ---- Machines ------------------------------------------------------------------
+const MACHINE_INFO = {
+  pump:   { title: "Industrial Pump", tile: "Pump" },
+  fan:    { title: "Industrial Fan", tile: "Fan", kind: "Axial duct fan" },
+  valve:  { title: "Solenoid Valve", tile: "Valve", kind: "2-way solenoid valve" },
+  slider: { title: "Slide Rail", tile: "Slide rail", kind: "Ball-screw linear slide" },
+};
+document.querySelectorAll(".dev").forEach(btn => btn.addEventListener("click", () => selectMachine(btn.dataset.machine)));
+function selectMachine(m) {
+  if (!MACHINE_INFO[m]) return;
+  state.machine = m;
+  holo?.setMachine(m);
+  document.querySelectorAll(".dev").forEach(b => {
+    const on = b.dataset.machine === m;
+    b.classList.toggle("is-selected", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  $("id-title").textContent = MACHINE_INFO[m].title;
+  $("t-device").textContent = MACHINE_INFO[m].tile;
+  const preview = m !== "pump";
+  consoleView.classList.toggle("is-preview", preview);
+  el.holo.classList.toggle("is-preview", preview);
+  if (preview) {
+    el.audio.pause();
+    el.identity.dataset.state = "preview";
+    consoleView.classList.remove("is-listening");
+    holo?.setState("preview");
+    el.pill.textContent = "3D view";
+    el.idFile.textContent = MACHINE_INFO[m].kind;
+    el.holoCap.textContent = "Sensor array, 8 microphones";
+    el.note.textContent = `Drag to rotate the ${MACHINE_INFO[m].tile.toLowerCase()}. Recordings you drop are scored with the pump model.`;
+  } else if (state.current) {
+    el.idFile.textContent = state.current.name;
+    showResult(state.current);
+    drawClip(state.current);
+  } else {
+    el.identity.dataset.state = "idle";
+    holo?.setState("idle");
+    el.pill.textContent = "Idle";
+    el.idFile.textContent = "No recording loaded";
+    el.note.textContent = "Scores at or above the threshold are flagged as abnormal.";
+  }
 }
 
 // ---- Toast ------------------------------------------------------------------
@@ -65,6 +109,7 @@ async function checkHealth() {
     if (!r.ok) throw new Error(r.status);
     const h = await r.json();
     setOnline(true, h.device);
+    if (Array.isArray(h.machines)) state.machines = h.machines;
     loadModelInfo();
   } catch {
     setOnline(false);
@@ -148,7 +193,7 @@ function addFiles(list) {
     if (clip.status !== "error") { prepareView(clip); firstGood ??= clip; }
   }
   if (skipped.length) toast(`${skipped.length === 1 ? `<b>${escapeHtml(skipped[0].name)}</b> was` : `${skipped.length} files were`} skipped. Only .wav files up to 20 MB can be checked.`);
-  if (firstGood) { if (state.view !== "console") showView("console"); select(firstGood); }
+  if (firstGood) { if (state.view !== "console") showView("console"); if (state.machine !== "pump") selectMachine("pump"); select(firstGood); }
   renderTally();
   pump();
 }
@@ -210,8 +255,7 @@ function select(clip) {
   const url = URL.createObjectURL(clip.file);
   el.audio.src = url; el.audio.dataset.url = url;
   el.logList.querySelectorAll(".log-row").forEach(b => b.setAttribute("aria-current", String(+b.dataset.id === clip.id)));
-  el.idFile.textContent = clip.name;
-  el.idFile.title = clip.name;
+  if (state.machine === "pump") { el.idFile.textContent = clip.name; el.idFile.title = clip.name; }
   showResult(clip);
   drawClip(clip);
 }
@@ -239,7 +283,7 @@ function drawClip(clip) {
     return;
   }
   const v = clip.view;
-  el.holoCap.textContent = v.channels > 1 ? `Sensor array, ${v.channels} channels mixed to mono` : "Single microphone";
+  if (state.machine === "pump") el.holoCap.textContent = v.channels > 1 ? `Sensor array, ${v.channels} channels mixed to mono` : "Single microphone";
   drawSpec(v.mel);
   redrawAll();
   let pk = 0;
@@ -367,6 +411,10 @@ let countRaf;
 function showResult(clip, fresh = false) {
   const s = clip.status;
   const vstate = { queued: "listening", running: "listening", normal: "normal", anomalous: "anomalous", error: "error" }[s] || "idle";
+  el.devPump.className = `dev is-${vstate}${state.machine === "pump" ? " is-selected" : ""}`;
+  el.devState.textContent = { listening: "Analysing", normal: "Healthy", anomalous: "Anomaly alert", error: "Check failed" }[vstate] || "Model ready";
+  drawDevWave();
+  if (state.machine !== "pump") return;
   el.identity.dataset.state = vstate;
   consoleView.classList.toggle("is-listening", vstate === "listening");
   holo?.setState(vstate);
@@ -376,9 +424,6 @@ function showResult(clip, fresh = false) {
     el.pill.textContent = label;
     el.pill.classList.remove("pop"); void el.pill.offsetWidth; el.pill.classList.add("pop");
   }
-  el.devPump.className = `dev is-active is-${vstate}`;
-  el.devState.textContent = { listening: "Analysing", normal: "Healthy", anomalous: "Anomaly alert", error: "Check failed" }[vstate];
-  drawDevWave();
 
   cancelAnimationFrame(countRaf);
   if (clip.result) {
@@ -498,11 +543,11 @@ function tick() {
 el.play.addEventListener("click", () => (el.audio.paused ? el.audio.play() : el.audio.pause()));
 el.audio.addEventListener("play", () => {
   el.play.classList.add("is-playing"); el.play.setAttribute("aria-label", "Pause");
-  holo?.setActiveMic(-2); tick();
+  holo?.setMics(true); tick();
 });
 el.audio.addEventListener("pause", () => {
   el.play.classList.remove("is-playing"); el.play.setAttribute("aria-label", "Play recording");
-  holo?.setActiveMic(-1); holo?.setLevel(0); cancelAnimationFrame(raf);
+  holo?.setMics(false); holo?.setLevel(0); cancelAnimationFrame(raf);
 });
 el.audio.addEventListener("timeupdate", () => { if (el.audio.currentTime >= span()) el.audio.pause(); });
 

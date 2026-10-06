@@ -1,19 +1,20 @@
+# Works on Python 3.11 to 3.13.
+# Only scikit-learn is pinned exactly: artifacts/pump_combiner.pkl was saved
+# with 1.6.1 and must be loaded with the same version.
+
 # ML / inference
-numpy==2.0.2
-librosa==0.10.2
-soundfile==0.12.1
-torch==2.14.0
+numpy>=2.0.2,<3
+librosa>=0.10.2
+soundfile>=0.12.1
+torch>=2.6
 scikit-learn==1.6.1
 
-# Training / evaluation
-pandas==2.2.2
-matplotlib==3.9.0
-tqdm==4.66.4
-
 # Backend
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-python-multipart==0.0.9
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.1
+python-multipart>=0.0.9
 
-# Dashboard
-streamlit==1.36.0
+# Training / evaluation (only needed for the notebook)
+pandas>=2.2.3
+matplotlib>=3.9.2
+tqdm>=4.66.4
