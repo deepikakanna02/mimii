@@ -74,7 +74,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
   -> normal / anomalous
 ```
 
-Only **pump** is scored right now. Fan, valve and slide rail can be opened in the dashboard as 3D views until their models are trained.
+The project covers the **pump** machine type. The pipeline (`manifest.json` + `AnomalyScorer`) is machine-agnostic, so fan, valve and slide rail can be added later by training their artifacts.
 
 ### Model performance (pump)
 
@@ -130,7 +130,8 @@ Served by FastAPI at `/`, so nothing extra to run.
 - Waveform, mel spectrogram, loudness timeline and frequency profile stay in sync with audio playback. Click or drag to seek; Space plays and pauses.
 - **History** lists every clip checked in the session.
 - **Model** shows the metrics, confusion matrix and approach comparison above, read live from the artifacts.
-- Select a machine card to switch the 3D view between pump, fan, solenoid valve and slide rail. Each has its own moving parts (impeller, rotor, plunger, carriage). Only the pump is scored; the others are previews.
+- A 3D wireframe pump (drag to rotate) reacts to the result and to audio playback.
+- Y2K-style interface; fonts are bundled in `frontend/assets/fonts`, so it works offline.
 
 The charts are drawn in the browser for display only, using the same mel settings as the model. The decision always comes from the backend.
 

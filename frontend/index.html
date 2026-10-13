@@ -3,96 +3,93 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MIMII Acoustic Console</title>
+  <title>MIMII Pump Inspector</title>
   <meta name="description" content="Drop a pump recording and check it against the MIMII anomaly model.">
-  <meta name="color-scheme" content="dark">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
-  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/vt323.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/krona-one.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="assets/mark-y2k.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
-  <div class="backdrop" aria-hidden="true"></div>
-
-  <div class="shell">
-    <!-- Sidebar -->
-    <aside class="side">
+  <div class="win">
+    <!-- Title bar -->
+    <header class="titlebar">
       <div class="brand">
-        <img src="assets/wordmark.svg" alt="MIMII" width="104" height="42">
-        <span class="brand-sub">Machine sound inspection</span>
+        <img src="assets/wordmark-y2k.svg" alt="MIMII" width="112" height="45">
+        <span class="brand-sub">pump inspector</span>
       </div>
-      <nav class="nav" aria-label="Views">
-        <button class="nav-item" type="button" data-view="console" aria-current="page">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
-          Console
-        </button>
-        <button class="nav-item" type="button" data-view="history">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/><path d="M12 8v4.5l3 2"/></svg>
-          History <span class="nav-count" id="nav-count" hidden>0</span>
-        </button>
-        <button class="nav-item" type="button" data-view="model">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M7.5 15h9"/></svg>
-          Model
-        </button>
+      <nav class="tabs" aria-label="Views">
+        <button class="nav-item" type="button" data-view="console" aria-current="page">Console</button>
+        <button class="nav-item" type="button" data-view="history">History <span class="nav-count" id="nav-count" hidden>0</span></button>
+        <button class="nav-item" type="button" data-view="model">Model</button>
       </nav>
-      <label class="load-btn">
-        <input type="file" id="file-input" accept=".wav,audio/wav" multiple>
-        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Load recordings</span>
-      </label>
-      <button class="api" id="status" type="button" data-state="checking" title="Re-check API connection">
-        <span class="api-lamp" aria-hidden="true"></span>
-        <span id="status-text">Connecting</span>
-      </button>
-    </aside>
+      <div class="titlebar-end">
+        <button class="api" id="status" type="button" data-state="checking" title="Re-check API connection">
+          <span class="api-lamp" aria-hidden="true"></span>
+          <span id="status-text">Connecting</span>
+        </button>
+        <label class="gel-btn">
+          <input type="file" id="file-input" accept=".wav,audio/wav" multiple>
+          <span>Load recordings</span>
+        </label>
+      </div>
+    </header>
 
     <main class="main">
       <!-- ========== CONSOLE VIEW ========== -->
       <section class="view" id="view-console" data-view="console">
-        <div class="tiles">
-          <div class="tile">
-            <span class="tile-l">Active device</span>
+
+        <!-- LCD readout strip -->
+        <div class="lcd" role="group" aria-label="Readings">
+          <div class="lcd-cell">
+            <span class="tile-l">Device</span>
             <span class="tile-v" id="t-device">Pump</span>
           </div>
-          <div class="tile">
+          <div class="lcd-cell">
             <span class="tile-l">Anomaly score</span>
             <span class="tile-v" id="t-score">--</span>
           </div>
-          <div class="tile">
+          <div class="lcd-cell">
             <span class="tile-l">Inference</span>
             <span class="tile-v" id="t-time">--</span>
           </div>
-          <div class="tile">
-            <span class="tile-l">Anomaly threshold</span>
+          <div class="lcd-cell">
+            <span class="tile-l">Threshold</span>
             <span class="tile-v" id="t-limit">--</span>
           </div>
         </div>
 
         <div class="stage">
-          <!-- Hologram -->
-          <div class="holo" id="holo">
-            <canvas id="holo-canvas" aria-label="3D model of the selected machine. Drag to rotate." role="img"></canvas>
-            <div class="holo-empty" id="holo-empty">
-              <p class="holo-cta">Drop a pump recording</p>
-              <p class="holo-sub">.wav, 10 seconds, up to 20 MB. Drop several to queue them.</p>
+          <!-- CRT monitor with the 3D pump -->
+          <div class="monitor">
+            <div class="viewport holo" id="holo">
+              <canvas id="holo-canvas" aria-label="3D model of the pump. Drag to rotate." role="img"></canvas>
+              <div class="holo-empty" id="holo-empty">
+                <p class="holo-cta">Drop a pump recording</p>
+                <p class="holo-sub">.wav, 10 seconds, up to 20 MB. Drop several to queue them.</p>
+              </div>
+              <p class="holo-cap" id="holo-cap">Sensor array, 8 channels</p>
             </div>
-            <p class="holo-cap" id="holo-cap">Sensor array, 8 channels</p>
+            <div class="monitor-chin">
+              <span class="monitor-led" aria-hidden="true"></span>
+              <span>Drag to rotate</span>
+            </div>
           </div>
 
-          <!-- Traces -->
+          <!-- Signal windows -->
           <div class="traces">
-            <div class="trace-block">
-              <div class="trace-head"><span>Sound intensity</span><span class="trace-aux" id="clock">0:00.0</span></div>
-              <div class="glass trace-box">
+            <div class="pane">
+              <div class="pane-bar"><span>Sound intensity</span><span class="pane-aux" id="clock">0:00.0</span></div>
+              <div class="screen trace-box">
                 <canvas id="wave" class="wave"></canvas>
                 <div class="ph" data-ph></div>
                 <div class="seekzone" data-seek role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"></div>
               </div>
             </div>
-            <div class="trace-block">
-              <div class="trace-head"><span>Mel spectrogram</span><span class="trace-aux">128 bands, 0 to 8 kHz</span></div>
-              <div class="glass trace-box spec-box">
+            <div class="pane">
+              <div class="pane-bar"><span>Mel spectrogram</span><span class="pane-aux">128 bands, 0 to 8 kHz</span></div>
+              <div class="screen trace-box spec-box">
                 <canvas id="spec" class="spec" width="313" height="128"></canvas>
                 <div class="scan" aria-hidden="true"></div>
                 <div class="ph" data-ph></div>
@@ -100,60 +97,68 @@
               </div>
             </div>
           </div>
-
-          <!-- Device rail -->
-          <ul class="devices" aria-label="Machines">
-            <li><button class="dev is-selected" type="button" data-machine="pump" id="dev-pump" aria-pressed="true">
-              <span class="dev-name">Pump</span>
-              <span class="dev-state" id="dev-pump-state">Model ready</span>
-              <canvas class="dev-wave" id="dev-pump-wave"></canvas>
-            </button></li>
-            <li><button class="dev is-off" type="button" data-machine="fan" aria-pressed="false"><span class="dev-name">Fan</span><span class="dev-state">Axial duct fan</span><span class="dev-flat"></span></button></li>
-            <li><button class="dev is-off" type="button" data-machine="valve" aria-pressed="false"><span class="dev-name">Valve</span><span class="dev-state">Solenoid valve</span><span class="dev-flat"></span></button></li>
-            <li><button class="dev is-off" type="button" data-machine="slider" aria-pressed="false"><span class="dev-name">Slide rail</span><span class="dev-state">Linear slide</span><span class="dev-flat"></span></button></li>
-          </ul>
         </div>
 
+        <!-- Verdict -->
         <div class="identity" id="identity" data-state="idle" aria-live="polite">
           <div class="id-text">
             <h1 class="id-title" id="id-title">Industrial Pump</h1>
             <div class="id-meta">
-              <span class="id-file" id="id-file">No recording loaded</span>
-              <span class="pill" id="pill">Idle</span>
               <button class="play" id="btn-play" type="button" disabled aria-label="Play recording">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
               </button>
+              <span class="pill" id="pill">Idle</span>
+              <span class="id-file" id="id-file">No recording loaded</span>
             </div>
             <p class="id-note" id="id-note">Scores at or above the threshold are flagged as abnormal.</p>
           </div>
-          <div class="rings">
-            <figure class="ring" id="ring-score">
-              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/><line class="ring-tick" id="ring-tick" x1="69" y1="40" x2="79" y2="40"/></svg>
-              <figcaption><b id="ring-score-v">--</b><span>Score</span></figcaption>
+          <div class="faceplate" role="group" aria-label="Result dials">
+            <figure class="knob" id="knob-score">
+              <div class="knob-dial">
+                <svg class="knob-scale" viewBox="0 0 120 120" aria-hidden="true"></svg>
+                <div class="knob-cap"><span class="knob-pointer"></span></div>
+              </div>
+              <figcaption>
+                <span class="knob-name">Score</span>
+                <span class="knob-lcd" id="knob-score-v">--</span>
+              </figcaption>
             </figure>
-            <figure class="ring ring-margin" id="ring-margin">
-              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/></svg>
-              <figcaption><b id="ring-margin-v">--</b><span>Margin</span></figcaption>
+            <figure class="knob" id="knob-margin">
+              <div class="knob-dial">
+                <svg class="knob-scale" viewBox="0 0 120 120" aria-hidden="true"></svg>
+                <div class="knob-cap"><span class="knob-pointer"></span></div>
+              </div>
+              <div class="knob-ends" aria-hidden="true"><span>Safe</span><span>Alert</span></div>
+              <figcaption>
+                <span class="knob-name">Margin</span>
+                <span class="knob-lcd" id="knob-margin-v">--</span>
+              </figcaption>
             </figure>
-            <figure class="ring ring-auc" id="ring-auc">
-              <svg viewBox="0 0 80 80"><circle class="ring-bg" cx="40" cy="40" r="34"/><circle class="ring-fg" cx="40" cy="40" r="34"/></svg>
-              <figcaption><b id="ring-auc-v">--</b><span>Model AUC</span></figcaption>
+            <figure class="knob" id="knob-auc">
+              <div class="knob-dial">
+                <svg class="knob-scale" viewBox="0 0 120 120" aria-hidden="true"></svg>
+                <div class="knob-cap"><span class="knob-pointer"></span></div>
+              </div>
+              <figcaption>
+                <span class="knob-name">Model AUC</span>
+                <span class="knob-lcd" id="knob-auc-v">--</span>
+              </figcaption>
             </figure>
           </div>
         </div>
 
         <div class="bottom">
-          <div class="bottom-block">
-            <div class="trace-head"><span>Loudness timeline</span><span class="trace-aux">0 to 10 s</span></div>
-            <div class="timeline-box">
+          <div class="pane">
+            <div class="pane-bar"><span>Loudness timeline</span><span class="pane-aux">0 to 10 s</span></div>
+            <div class="screen timeline-box">
               <canvas id="timeline" class="timeline"></canvas>
               <div class="ph" data-ph></div>
               <div class="seekzone" data-seek aria-hidden="true"></div>
             </div>
           </div>
-          <div class="bottom-block">
-            <div class="trace-head"><span>Frequency profile</span><span class="trace-aux" id="peak">Average over the clip</span></div>
-            <canvas id="profile" class="profile"></canvas>
+          <div class="pane">
+            <div class="pane-bar"><span>Frequency profile</span><span class="pane-aux" id="peak">Average over the clip</span></div>
+            <div class="screen profile-box"><canvas id="profile" class="profile"></canvas></div>
           </div>
         </div>
       </section>
@@ -174,34 +179,44 @@
           <p class="view-sub" id="model-sub">Measured on pump clips the model never saw during training.</p>
         </header>
         <div class="model-grid">
-          <div class="glass kpis">
-            <div><b id="k-auc">--</b><span>ROC-AUC</span></div>
-            <div><b id="k-p">--</b><span>Precision</span></div>
-            <div><b id="k-r">--</b><span>Recall</span></div>
-            <div><b id="k-f1">--</b><span>F1 score</span></div>
+          <div class="pane">
+            <div class="pane-bar"><span>Held-out test set</span></div>
+            <div class="lcd kpis">
+              <div class="lcd-cell"><span class="tile-l">ROC-AUC</span><b class="tile-v" id="k-auc">--</b></div>
+              <div class="lcd-cell"><span class="tile-l">Precision</span><b class="tile-v" id="k-p">--</b></div>
+              <div class="lcd-cell"><span class="tile-l">Recall</span><b class="tile-v" id="k-r">--</b></div>
+              <div class="lcd-cell"><span class="tile-l">F1 score</span><b class="tile-v" id="k-f1">--</b></div>
+            </div>
           </div>
-          <figure class="glass matrix">
-            <figcaption>Test clips, by what they were and what the model called them</figcaption>
-            <div class="mx">
-              <span></span><span class="mx-h">Called normal</span><span class="mx-h">Called abnormal</span>
-              <span class="mx-r">Normal</span><b class="mx-c ok" id="mx-tn">--</b><b class="mx-c bad" id="mx-fp">--</b>
-              <span class="mx-r">Abnormal</span><b class="mx-c bad" id="mx-fn">--</b><b class="mx-c ok" id="mx-tp">--</b>
+          <figure class="pane matrix">
+            <div class="pane-bar"><span>Confusion matrix</span></div>
+            <div class="pane-body">
+              <figcaption>Test clips, by what they were and what the model called them</figcaption>
+              <div class="mx">
+                <span></span><span class="mx-h">Called normal</span><span class="mx-h">Called abnormal</span>
+                <span class="mx-r">Normal</span><b class="mx-c ok" id="mx-tn">--</b><b class="mx-c bad" id="mx-fp">--</b>
+                <span class="mx-r">Abnormal</span><b class="mx-c bad" id="mx-fn">--</b><b class="mx-c ok" id="mx-tp">--</b>
+              </div>
             </div>
           </figure>
-          <div class="glass approaches">
-            <h3>Approaches compared</h3>
-            <p class="view-sub">Cross-validated ROC-AUC. Whiskers show the spread across folds.</p>
-            <ul class="bars" id="bars"></ul>
+          <div class="pane approaches">
+            <div class="pane-bar"><span>Approaches compared</span></div>
+            <div class="pane-body">
+              <p class="view-sub">Cross-validated ROC-AUC. Whiskers show the spread across folds.</p>
+              <ul class="bars" id="bars"></ul>
+            </div>
           </div>
-          <div class="glass pipeline">
-            <h3>What happens to a recording</h3>
-            <ol class="steps">
-              <li><b>Resample and trim</b><span>Mixed to mono at 16 kHz, cut or padded to 10 seconds</span></li>
-              <li><b>Mel spectrogram</b><span>128 bands by 313 frames, normalised with training statistics</span></li>
-              <li><b>Two autoencoders</b><span>Each tries to rebuild the spectrogram of a healthy pump</span></li>
-              <li><b>Error features</b><span>Mean, max, spread and 90th percentile of the rebuild error</span></li>
-              <li><b>Classifier vote</b><span id="vote-desc">Three classifiers vote, weighted by validation AUC</span></li>
-            </ol>
+          <div class="pane pipeline">
+            <div class="pane-bar"><span>What happens to a recording</span></div>
+            <div class="pane-body">
+              <ol class="steps">
+                <li><b>Resample and trim</b><span>Mixed to mono at 16 kHz, cut or padded to 10 seconds</span></li>
+                <li><b>Mel spectrogram</b><span>128 bands by 313 frames, normalised with training statistics</span></li>
+                <li><b>Two autoencoders</b><span>Each tries to rebuild the spectrogram of a healthy pump</span></li>
+                <li><b>Error features</b><span>Mean, max, spread and 90th percentile of the rebuild error</span></li>
+                <li><b>Classifier vote</b><span id="vote-desc">Three classifiers vote, weighted by validation AUC</span></li>
+              </ol>
+            </div>
           </div>
         </div>
       </section>

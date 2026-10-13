@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 81.6 32" role="img" aria-label="MIMII">
+  <defs>
+    <linearGradient id="chrome" x1="0" y1="2" x2="0" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.42" stop-color="#d9e2f2"/>
+      <stop offset="0.5" stop-color="#5f6f93"/><stop offset="0.62" stop-color="#c4d2ea"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="hot" x1="0" y1="2" x2="0" y2="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd1f3"/><stop offset="0.5" stop-color="#ff2fb4"/><stop offset="1" stop-color="#b3007a"/>
+    </linearGradient>
+  </defs>
+  <path d="M3.6 27.8V4.4L12.6 17.6L21.6 4.4V27.8" fill="none" stroke="#1b1f4a" stroke-width="7.0" stroke-linejoin="miter" stroke-miterlimit="10" stroke-linecap="square"/>
+  <path d="M3.6 27.8V4.4L12.6 17.6L21.6 4.4V27.8" fill="none" stroke="url(#chrome)" stroke-width="5.2" stroke-linejoin="miter" stroke-miterlimit="10" stroke-linecap="square"/>
+  <rect x="28.6" y="23.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="28.6" y="18.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="28.6" y="13.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="28.6" y="8.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="28.6" y="3.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <path d="M40.8 27.8V4.4L49.8 17.6L58.8 4.4V27.8" fill="none" stroke="#1b1f4a" stroke-width="7.0" stroke-linejoin="miter" stroke-miterlimit="10" stroke-linecap="square"/>
+  <path d="M40.8 27.8V4.4L49.8 17.6L58.8 4.4V27.8" fill="none" stroke="url(#chrome)" stroke-width="5.2" stroke-linejoin="miter" stroke-miterlimit="10" stroke-linecap="square"/>
+  <rect x="65.8" y="23.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="65.8" y="18.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="65.8" y="13.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="65.8" y="8.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="65.8" y="3.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="75.4" y="23.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="75.4" y="18.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="75.4" y="13.6" width="5.2" height="4.2" rx="1.2" fill="url(#chrome)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="75.4" y="8.6" width="5.2" height="4.2" rx="1.2" fill="url(#hot)" stroke="#1b1f4a" stroke-width="0.9"/>
+  <rect x="75.4" y="3.6" width="5.2" height="4.2" rx="1.2" fill="url(#hot)" stroke="#1b1f4a" stroke-width="0.9"/>
+</svg>

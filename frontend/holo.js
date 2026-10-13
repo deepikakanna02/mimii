@@ -1,15 +1,17 @@
-// Wireframe holograms of the four MIMII machine types (pump, fan, valve, slide rail),
-// wrapped in a particle shell and the 8-microphone ring used for the recordings.
+// Wireframe 3D pump in a light "3D viewport" style (Y2K era modelling software):
+// navy/aqua lines on a pale screen, a floor grid, a particle shell and the
+// 8-microphone ring used for the MIMII recordings.
 // Purely presentational: nothing here affects scoring.
 import * as THREE from "three";
 
+// [start, end] of the colour gradient across the machine, tuned for a light screen
 const PALETTES = {
-  idle:      ["#3fe3e0", "#8f7bff"],
-  listening: ["#7ff7ff", "#6f8dff"],
-  normal:    ["#36e3ad", "#4aa8ff"],
-  anomalous: ["#ffb14a", "#ff3d6e"],
-  error:     ["#8a93ad", "#5b6480"],
-  preview:   ["#5fd8ff", "#a07bff"],
+  idle:      ["#161a45", "#1f6bff"],
+  listening: ["#0a2fa8", "#13b6ff"],
+  normal:    ["#06753a", "#1f6bff"],
+  anomalous: ["#b3002c", "#ff2fb4"],
+  error:     ["#5d6680", "#9aa3b8"],
+  preview:   ["#161a45", "#1f6bff"],
 };
 for (const k in PALETTES) PALETTES[k] = PALETTES[k].map(c => new THREE.Color(c));
 
@@ -308,8 +310,8 @@ export function createHologram(canvas) {
   world.add(stage);
 
   const painted = []; // { geo, tMix, col }
-  const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-  const glowMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false });
+  const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.92, depthWrite: false });
+  const glowMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.08, depthWrite: false });
 
   function toObject(lines) {
     const geo = new THREE.BufferGeometry();
@@ -352,6 +354,14 @@ export function createHologram(canvas) {
     colorDirty = true;
   }
 
+  // ---------- viewport floor grid ----------
+  const grid = new THREE.GridHelper(7, 20, 0x8a96bd, 0xb9c3df);
+  grid.position.y = -0.98;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.55;
+  grid.material.depthWrite = false;
+  world.add(grid);
+
   // ---------- particle shell ----------
   const P = 2600, pPos = new Float32Array(P * 3), pSeed = new Float32Array(P);
   const golden = Math.PI * (3 - Math.sqrt(5));
@@ -364,7 +374,7 @@ export function createHologram(canvas) {
   pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
   const pCol = new Float32Array(P * 3);
   pGeo.setAttribute("color", new THREE.BufferAttribute(pCol, 3));
-  const pMat = new THREE.PointsMaterial({ size: 0.026, vertexColors: true, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+  const pMat = new THREE.PointsMaterial({ size: 0.022, vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false });
   const shell = new THREE.Points(pGeo, pMat);
   world.add(shell);
 
@@ -373,7 +383,7 @@ export function createHologram(canvas) {
   const ringPts = [];
   for (let i = 0; i <= 96; i++) { const a = (i / 96) * TAU; ringPts.push(V(Math.cos(a) * 2.75, 0, Math.sin(a) * 2.75)); }
   sensorRing.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts),
-    new THREE.LineBasicMaterial({ color: 0x7d8bff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending })));
+    new THREE.LineBasicMaterial({ color: 0xff2fb4, transparent: true, opacity: 0.35 })));
   const mics = [];
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * TAU, g = new THREE.Group();
@@ -381,10 +391,10 @@ export function createHologram(canvas) {
     const c = [];
     for (let k = 0; k <= 20; k++) { const b = (k / 20) * TAU; c.push(V(Math.cos(b) * 0.09, Math.sin(b) * 0.09, 0)); }
     const loop = new THREE.Line(new THREE.BufferGeometry().setFromPoints(c),
-      new THREE.LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending }));
+      new THREE.LineBasicMaterial({ color: 0xff2fb4, transparent: true, opacity: 0.8 }));
     loop.lookAt(0, 0, 0);
     const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([V(0, 0, 0)]),
-      new THREE.PointsMaterial({ size: 0.12, color: 0x9fe8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+      new THREE.PointsMaterial({ size: 0.12, color: 0xff2fb4, transparent: true, opacity: 0.9, depthWrite: false }));
     g.add(loop, dot);
     sensorRing.add(g);
     mics.push({ g, dot });
@@ -396,7 +406,7 @@ export function createHologram(canvas) {
   const scanPts = [];
   for (let i = 0; i <= 64; i++) { const a = (i / 64) * TAU; scanPts.push(V(0, Math.cos(a) * 1.3, Math.sin(a) * 1.3)); }
   const scan = new THREE.Line(new THREE.BufferGeometry().setFromPoints(scanPts),
-    new THREE.LineBasicMaterial({ color: 0xbaffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+    new THREE.LineBasicMaterial({ color: 0x13b6ff, transparent: true, opacity: 0 }));
   world.add(scan);
 
   // ---------- state ----------
@@ -413,7 +423,7 @@ export function createHologram(canvas) {
       o.geo.attributes.color.needsUpdate = true;
     }
     for (let i = 0; i < P; i++) {
-      const t = pSeed[i], k = 0.5 + 0.5 * t;
+      const t = pSeed[i], k = 0.85 + 0.3 * t;
       pCol[i * 3] = (a.r + (b.r - a.r) * t) * k; pCol[i * 3 + 1] = (a.g + (b.g - a.g) * t) * k; pCol[i * 3 + 2] = (a.b + (b.b - a.b) * t) * k;
     }
     pGeo.attributes.color.needsUpdate = true;
@@ -494,7 +504,7 @@ export function createHologram(canvas) {
     shell.scale.setScalar(1 + Math.sin(t * 1.3) * 0.008 + levelSmooth * 0.06);
     shell.rotation.y = -t * 0.03;
     pMat.size = 0.024 + levelSmooth * 0.02;
-    lineMat.opacity = mode === "anomalous" ? 0.75 + 0.25 * Math.sin(t * 6) : 0.9;
+    lineMat.opacity = mode === "anomalous" ? 0.7 + 0.3 * Math.sin(t * 6) : 0.92;
 
     sensorRing.rotation.y = t * 0.05;
     mics.forEach(m => { m.g.scale.setScalar(micsOn ? 1.6 + levelSmooth * 1.4 : 1); m.dot.material.opacity = micsOn ? 1 : 0.5; });

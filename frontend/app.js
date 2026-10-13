@@ -7,7 +7,6 @@ const params = new URLSearchParams(location.search);
 const API = (params.get("api") ||
   (location.protocol === "file:" || location.port !== "8000" ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
 const MAX_BYTES = 20 * 1024 * 1024;
-const RING_C = 2 * Math.PI * 34;
 
 const $ = id => document.getElementById(id);
 const el = {
@@ -17,11 +16,7 @@ const el = {
   tScore: $("t-score"), tTime: $("t-time"), tLimit: $("t-limit"),
   wave: $("wave"), spec: $("spec"), timeline: $("timeline"), profile: $("profile"), peak: $("peak"),
   clock: $("clock"), play: $("btn-play"), audio: $("audio"),
-  devPump: $("dev-pump"), devState: $("dev-pump-state"), devWave: $("dev-pump-wave"),
   identity: $("identity"), idFile: $("id-file"), pill: $("pill"), note: $("id-note"),
-  ringScore: document.querySelector("#ring-score .ring-fg"), ringScoreV: $("ring-score-v"), ringTick: $("ring-tick"),
-  ringMargin: document.querySelector("#ring-margin .ring-fg"), ringMarginV: $("ring-margin-v"),
-  ringAuc: document.querySelector("#ring-auc .ring-fg"), ringAucV: $("ring-auc-v"),
   logList: $("log-list"), tally: $("tally"), bars: $("bars"), toast: $("toast"),
 };
 const consoleView = $("view-console");
@@ -32,6 +27,36 @@ const pct = v => `${Math.max(0, Math.min(1, v)) * 100}%`;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const holo = createHologram($("holo-canvas"));
+
+// ---- Hi-fi knobs ----------------------------------------------------------------
+// 270 degree sweep like an amplifier dial; ticks light up to the value.
+const KNOB_TICKS = 31;
+function buildKnob(id) {
+  const fig = $(id), svg = fig.querySelector(".knob-scale"), ticks = [];
+  for (let i = 0; i < KNOB_TICKS; i++) {
+    const a = ((-135 + (270 * i) / (KNOB_TICKS - 1)) * Math.PI) / 180;
+    const long = i % 5 === 0, r1 = long ? 47 : 50, r2 = 57;
+    const ln = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    ln.setAttribute("x1", 60 + r1 * Math.sin(a)); ln.setAttribute("y1", 60 - r1 * Math.cos(a));
+    ln.setAttribute("x2", 60 + r2 * Math.sin(a)); ln.setAttribute("y2", 60 - r2 * Math.cos(a));
+    if (long) ln.classList.add("long");
+    svg.appendChild(ln); ticks.push(ln);
+  }
+  return { fig, cap: fig.querySelector(".knob-cap"), lcd: fig.querySelector(".knob-lcd"), ticks };
+}
+function setKnob(k, frac, text, from = 0) {
+  frac = Math.max(0, Math.min(1, frac));
+  k.cap.style.transform = `rotate(${-135 + 270 * frac}deg)`;
+  const lo = Math.min(from, frac), hi = Math.max(from, frac);
+  k.ticks.forEach((t, i) => { const p = i / (KNOB_TICKS - 1); t.classList.toggle("on", text !== "--" && p >= lo - 1e-6 && p <= hi + 1e-6); });
+  if (text != null) k.lcd.textContent = text;
+}
+function markKnob(k, frac) {
+  const idx = Math.round(frac * (KNOB_TICKS - 1));
+  k.ticks.forEach((t, i) => t.classList.toggle("mark", i === idx));
+}
+const knobs = { score: buildKnob("knob-score"), margin: buildKnob("knob-margin"), auc: buildKnob("knob-auc") };
+setKnob(knobs.score, 0, "--"); setKnob(knobs.margin, 0.5, "--", 0.5); setKnob(knobs.auc, 0, "--");
 
 // ---- Views ------------------------------------------------------------------
 document.querySelectorAll(".nav-item").forEach(btn => btn.addEventListener("click", () => showView(btn.dataset.view)));
@@ -44,50 +69,6 @@ function showView(name) {
     el.bars.querySelectorAll(".bar").forEach((b, i) => setTimeout(() => (b.querySelector(".bar-fill").style.width = b.dataset.w), 80 + i * 90)));
   else el.bars.querySelectorAll(".bar-fill").forEach(f => (f.style.width = 0));
   if (name === "console") requestAnimationFrame(redrawAll);
-}
-
-// ---- Machines ------------------------------------------------------------------
-const MACHINE_INFO = {
-  pump:   { title: "Industrial Pump", tile: "Pump" },
-  fan:    { title: "Industrial Fan", tile: "Fan", kind: "Axial duct fan" },
-  valve:  { title: "Solenoid Valve", tile: "Valve", kind: "2-way solenoid valve" },
-  slider: { title: "Slide Rail", tile: "Slide rail", kind: "Ball-screw linear slide" },
-};
-document.querySelectorAll(".dev").forEach(btn => btn.addEventListener("click", () => selectMachine(btn.dataset.machine)));
-function selectMachine(m) {
-  if (!MACHINE_INFO[m]) return;
-  state.machine = m;
-  holo?.setMachine(m);
-  document.querySelectorAll(".dev").forEach(b => {
-    const on = b.dataset.machine === m;
-    b.classList.toggle("is-selected", on);
-    b.setAttribute("aria-pressed", String(on));
-  });
-  $("id-title").textContent = MACHINE_INFO[m].title;
-  $("t-device").textContent = MACHINE_INFO[m].tile;
-  const preview = m !== "pump";
-  consoleView.classList.toggle("is-preview", preview);
-  el.holo.classList.toggle("is-preview", preview);
-  if (preview) {
-    el.audio.pause();
-    el.identity.dataset.state = "preview";
-    consoleView.classList.remove("is-listening");
-    holo?.setState("preview");
-    el.pill.textContent = "3D view";
-    el.idFile.textContent = MACHINE_INFO[m].kind;
-    el.holoCap.textContent = "Sensor array, 8 microphones";
-    el.note.textContent = `Drag to rotate the ${MACHINE_INFO[m].tile.toLowerCase()}. Recordings you drop are scored with the pump model.`;
-  } else if (state.current) {
-    el.idFile.textContent = state.current.name;
-    showResult(state.current);
-    drawClip(state.current);
-  } else {
-    el.identity.dataset.state = "idle";
-    holo?.setState("idle");
-    el.pill.textContent = "Idle";
-    el.idFile.textContent = "No recording loaded";
-    el.note.textContent = "Scores at or above the threshold are flagged as abnormal.";
-  }
 }
 
 // ---- Toast ------------------------------------------------------------------
@@ -145,8 +126,7 @@ async function loadModelInfo() {
       $("model-sub").textContent = `Measured on ${tn + fp + fn + tp} pump clips the model never saw during training.`;
     }
     if (m.auc_roc != null) {
-      el.ringAuc.style.strokeDashoffset = RING_C * (1 - m.auc_roc);
-      el.ringAucV.textContent = fmt(m.auc_roc, 2);
+      setKnob(knobs.auc, m.auc_roc, fmt(m.auc_roc));
     }
     if (m.combiner) $("vote-desc").textContent = "Logistic regression, random forest and gradient boosting vote, weighted by validation AUC";
     renderBars(m.comparison || []);
@@ -173,8 +153,7 @@ function setThreshold(t) {
   if (t == null) return;
   state.threshold = t;
   el.tLimit.textContent = fmt(t);
-  el.ringTick.style.transform = `rotate(${t * 360}deg)`;
-  el.ringTick.classList.add("on");
+  markKnob(knobs.score, t);
 }
 
 // ---- Intake -------------------------------------------------------------------
@@ -193,7 +172,7 @@ function addFiles(list) {
     if (clip.status !== "error") { prepareView(clip); firstGood ??= clip; }
   }
   if (skipped.length) toast(`${skipped.length === 1 ? `<b>${escapeHtml(skipped[0].name)}</b> was` : `${skipped.length} files were`} skipped. Only .wav files up to 20 MB can be checked.`);
-  if (firstGood) { if (state.view !== "console") showView("console"); if (state.machine !== "pump") selectMachine("pump"); select(firstGood); }
+  if (firstGood) { if (state.view !== "console") showView("console"); select(firstGood); }
   renderTally();
   pump();
 }
@@ -276,14 +255,14 @@ function drawClip(clip) {
   el.play.disabled = !ok;
   setPlayhead(0);
   if (!ok) {
-    [el.wave, el.timeline, el.profile, el.devWave].forEach(c => { const { ctx, w, h } = sizeCanvas(c); ctx.clearRect(0, 0, w, h); });
+    [el.wave, el.timeline, el.profile].forEach(c => { const { ctx, w, h } = sizeCanvas(c); ctx.clearRect(0, 0, w, h); });
     el.spec.classList.remove("is-ready");
     el.peak.textContent = "Average over the clip";
     if (clip.view?.failed) el.note.textContent = "This browser could not decode the file for preview. The model can still score it.";
     return;
   }
   const v = clip.view;
-  if (state.machine === "pump") el.holoCap.textContent = v.channels > 1 ? `Sensor array, ${v.channels} channels mixed to mono` : "Single microphone";
+  el.holoCap.textContent = v.channels > 1 ? `Sensor array, ${v.channels} channels mixed to mono` : "Single microphone";
   drawSpec(v.mel);
   redrawAll();
   let pk = 0;
@@ -295,7 +274,7 @@ function drawClip(clip) {
 function redrawAll() {
   if (!ready() || state.view !== "console") return;
   const p = progress();
-  drawWave(p); drawTimeline(p); drawProfile(); drawDevWave();
+  drawWave(p); drawTimeline(p); drawProfile();
 }
 
 let envCache = { key: "", env: null };
@@ -309,10 +288,10 @@ function drawWave(p) {
   const { mins, maxs, peak } = envCache.env;
   ctx.clearRect(0, 0, w, h);
   const g = ctx.createLinearGradient(0, 0, w, 0);
-  g.addColorStop(0, "#ff4fa3"); g.addColorStop(0.55, "#c45cff"); g.addColorStop(1, "#8a6cff");
+  g.addColorStop(0, "#3dfcff"); g.addColorStop(0.5, "#b8ff3d"); g.addColorStop(1, "#ff5ce1");
   const mid = h / 2, scale = (h / 2 - 2 * dpr) / peak, split = p * cols;
   ctx.fillStyle = g;
-  ctx.shadowColor = "rgba(255, 79, 163, 0.6)"; ctx.shadowBlur = 8 * dpr;
+  ctx.shadowColor = "rgba(184, 255, 61, 0.55)"; ctx.shadowBlur = 6 * dpr;
   for (let i = 0; i < cols; i++) {
     const amp = Math.max(Math.abs(maxs[i]), Math.abs(mins[i])) * scale;
     ctx.globalAlpha = i < split ? 1 : 0.42;
@@ -348,8 +327,8 @@ function drawSpec(mel) {
 }
 
 function axisLabels(ctx, w, h, dpr, ticks) {
-  ctx.fillStyle = "rgba(138, 147, 173, 0.9)";
-  ctx.font = `${10 * dpr}px Manrope, sans-serif`;
+  ctx.fillStyle = "rgba(170, 220, 255, 0.75)";
+  ctx.font = `${10 * dpr}px Verdana, Tahoma, sans-serif`;
   ctx.textBaseline = "bottom";
   ticks.forEach(([x, label], i) => {
     ctx.textAlign = i === 0 ? "left" : i === ticks.length - 1 ? "right" : "center";
@@ -368,7 +347,7 @@ function drawTimeline(p) {
     const a = Math.floor((i / cols) * rms.length), b = Math.max(a + 1, Math.floor(((i + 1) / cols) * rms.length));
     let s = 0; for (let k = a; k < b; k++) s = Math.max(s, rms[k]);
     const bh = Math.max(2 * dpr, s * (base - 2 * dpr));
-    ctx.fillStyle = i / cols < p ? "#3fe3e0" : "rgba(63, 227, 224, 0.32)";
+    ctx.fillStyle = i / cols < p ? "#b8ff3d" : "rgba(184, 255, 61, 0.3)";
     ctx.fillRect(i * (bar + gap), base - bh, bar, bh);
   }
   axisLabels(ctx, w, h, dpr, [0, 2.5, 5, 7.5, 10].map(s => [(s / 10) * w, s === 10 ? "10 s" : String(s)]));
@@ -385,7 +364,7 @@ function drawProfile() {
   for (let m = 0; m < n; m++) {
     const k = (profile[m] - lo) / (hi - lo || 1);
     const bh = Math.max(dpr, Math.pow(k, 1.5) * (base - 2 * dpr));
-    ctx.fillStyle = `rgba(${Math.round(120 + 80 * k)}, ${Math.round(90 + 20 * k)}, 255, ${0.35 + 0.65 * k})`;
+    ctx.fillStyle = `rgba(${Math.round(61 + 194 * k)}, ${Math.round(252 - 160 * k)}, ${Math.round(255 - 30 * k)}, ${0.4 + 0.6 * k})`;
     ctx.fillRect(m * (bw + gap), base - bh, bw, bh);
   }
   // mel axis is non-linear: put each label where that frequency actually falls
@@ -393,28 +372,11 @@ function drawProfile() {
   axisLabels(ctx, w, h, dpr, [[0, "0"], [bandX(500), "500"], [bandX(1000), "1k"], [bandX(2000), "2k"], [bandX(4000), "4k"], [w, "8 kHz"]]);
 }
 
-function drawDevWave() {
-  const clip = state.current;
-  const { w, h, dpr, ctx } = sizeCanvas(el.devWave);
-  ctx.clearRect(0, 0, w, h);
-  if (!ready()) return;
-  const cols = Math.floor(w / (3 * dpr)), env = DSP.envelope(clip.view.mono, cols);
-  ctx.fillStyle = clip.status === "anomalous" ? "#ff9a3d" : clip.status === "normal" ? "#36e3ad" : "#3fe3e0";
-  for (let i = 0; i < cols; i++) {
-    const a = (Math.max(Math.abs(env.maxs[i]), Math.abs(env.mins[i])) / env.peak) * (h / 2 - dpr);
-    ctx.fillRect(i * 3 * dpr, h / 2 - a, 1.6 * dpr, Math.max(dpr, a * 2));
-  }
-}
-
 // ---- Result display ------------------------------------------------------------------
 let countRaf;
 function showResult(clip, fresh = false) {
   const s = clip.status;
   const vstate = { queued: "listening", running: "listening", normal: "normal", anomalous: "anomalous", error: "error" }[s] || "idle";
-  el.devPump.className = `dev is-${vstate}${state.machine === "pump" ? " is-selected" : ""}`;
-  el.devState.textContent = { listening: "Analysing", normal: "Healthy", anomalous: "Anomaly alert", error: "Check failed" }[vstate] || "Model ready";
-  drawDevWave();
-  if (state.machine !== "pump") return;
   el.identity.dataset.state = vstate;
   consoleView.classList.toggle("is-listening", vstate === "listening");
   holo?.setState(vstate);
@@ -430,19 +392,17 @@ function showResult(clip, fresh = false) {
     const { anomaly_score: score, threshold, inference_ms } = clip.result;
     setThreshold(threshold);
     const margin = score - threshold;
-    const room = margin >= 0 ? 1 - threshold : threshold;
-    el.ringScore.style.strokeDashoffset = RING_C * (1 - score);
-    el.ringMargin.style.strokeDashoffset = RING_C * (1 - Math.min(1, Math.abs(margin) / room));
-    el.ringMarginV.textContent = `${margin >= 0 ? "+" : "−"}${fmt(Math.abs(margin), 2)}`;
+    setKnob(knobs.score, score, null);
+    setKnob(knobs.margin, 0.5 + 0.5 * Math.max(-1, Math.min(1, margin / Math.max(threshold, 1 - threshold))),
+      `${margin >= 0 ? "+" : "−"}${fmt(Math.abs(margin))}`, 0.5);
     setTile(el.tTime, `${Math.round(inference_ms ?? clip.result.roundtrip_ms)}ms`, fresh);
     countTo(score, fresh && !reduceMotion);
     el.note.textContent = s === "anomalous"
       ? `Scored ${fmt(margin)} above the threshold. This sound does not match the healthy pumps the model learned from. Listen back and compare it with a recording from a pump you know is healthy.`
       : `Scored ${fmt(-margin)} below the threshold. This sound matches the healthy pumps the model learned from.`;
   } else {
-    el.ringScore.style.strokeDashoffset = RING_C;
-    el.ringMargin.style.strokeDashoffset = RING_C;
-    el.ringScoreV.textContent = "--"; el.ringMarginV.textContent = "--";
+    setKnob(knobs.score, 0, "--");
+    setKnob(knobs.margin, 0.5, "--", 0.5);
     el.tScore.textContent = "--"; el.tTime.textContent = "--";
     el.note.textContent = s === "error"
       ? (clip.error === "offline" ? "The API could not be reached. Start the backend, then select this clip in History to retry." : `${clip.error} Pick a 10 second .wav pump recording.`)
@@ -457,7 +417,7 @@ function setTile(node, text, flash) {
 }
 
 function countTo(target, animate) {
-  const write = v => { el.ringScoreV.textContent = fmt(v, 2); el.tScore.textContent = fmt(v); };
+  const write = v => { knobs.score.lcd.textContent = fmt(v); el.tScore.textContent = fmt(v); };
   if (!animate) { write(target); return; }
   el.tScore.classList.remove("flash"); void el.tScore.offsetWidth; el.tScore.classList.add("flash");
   const start = performance.now(), dur = 1000;
