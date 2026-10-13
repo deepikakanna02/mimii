@@ -36,6 +36,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Make browsers re-check dashboard files on every load, so an updated
+# index.html never runs with a cached old styles.css / app.js.
+# Unchanged files still come back as a quick 304, so this costs nothing.
+@app.middleware("http")
+async def no_stale_frontend(request, call_next):
+    response = await call_next(request)
+    if request.method == "GET" and not request.url.path.startswith(("/health", "/model-info", "/docs", "/openapi", "/redoc")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 ALLOWED_CONTENT_TYPES = {"audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"}
 scorer = AnomalyScorer(str(ARTIFACT_DIR))
